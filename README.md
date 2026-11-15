@@ -1,6 +1,6 @@
-# Fin Snap
+# SnapTrack
 
-Fin Snap is a private, self-hosted expense tracker for one household. Snap a photo of a paper receipt and it becomes structured, line-item expense data: the store, every item, prices, discounts, tax and payment. That data feeds monthly breakdowns, spending trends and price tracking. Everything runs on home hardware; no data leaves the home network.
+SnapTrack is a private, self-hosted expense tracker for one household. Snap a photo of a paper receipt and it becomes structured, line-item expense data: the store, every item, prices, discounts, tax and payment. That data feeds monthly breakdowns, spending trends and price tracking. Everything runs on home hardware; no data leaves the home network.
 
 ![Status](https://img.shields.io/badge/status-planning-lightgrey)
 ![Language](https://img.shields.io/badge/language-TypeScript-blue)
@@ -16,7 +16,7 @@ Fin Snap is a private, self-hosted expense tracker for one household. Snap a pho
 - **Replace manual logging.** Capturing a receipt takes less effort than typing it into a spreadsheet, and checking the result is usually a glance.
 - **High-quality software.** Clean architecture, loose coupling and code that stays easy to change, enforced by automated checks.
 
-Fin Snap is built for a single household of a few people on a mix of Android phones and iPhones. Every expense records who logged it, so totals can be split by person.
+SnapTrack is built for a single household of a few people on a mix of Android phones and iPhones. Every expense records who logged it, so totals can be split by person.
 
 ---
 
@@ -25,7 +25,7 @@ Fin Snap is built for a single household of a few people on a mix of Android pho
 1. **Capture.** On a phone, tap **Snap** to photograph a receipt, or choose several photos from the library at once. On a desktop, pick image files or drag them in. JPEG, PNG and iPhone HEIC photos all work.
 2. **Save first, upload after.** Each receipt is saved on the device before it uploads, so capture works with no connection and nothing is lost. Queued receipts upload when the connection returns, and the app shows how many are waiting.
 3. **Extraction.** On the server, a self-hosted vision model reads the receipt: the store and its identifying details, date and time, every line item with quantity, price and discounts, subtotal, tax, total, payments, and a full word-for-word transcription. Receipts it cannot read are marked for review and filled in by hand.
-4. **Store identification.** The store is identified as a company (Walmart, not "Walmart #4512") and matched only on a known identifier, never on a guess. Once someone confirms the store for one receipt, Fin Snap remembers its identifiers and never asks again.
+4. **Store identification.** The store is identified as a company (Walmart, not "Walmart #4512") and matched only on a known identifier, never on a guess. Once someone confirms the store for one receipt, SnapTrack remembers its identifiers and never asks again.
 5. **Item naming and categories.** The same item is counted as one across receipts. Each line is categorized on its own, so one receipt can span several categories. Corrections and names you give items carry forward to future receipts. The software's own suggestions are never applied unless you accept them.
 6. **Review.** Extracted data counts right away, marked unreviewed, and can be checked at any time beside the original image.
 7. **Analysis.** Expenses roll up into breakdowns, trends, price history and spending spikes.

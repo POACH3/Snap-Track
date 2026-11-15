@@ -1,4 +1,4 @@
-# Fin Snap UI Design Guide
+# SnapTrack UI Design Guide
 
 *Read this before adding or changing any UI or CSS.* Values will come from one shared theme file in `apps/web` (the styling tool is not chosen yet; see "Theme tokens"). That file is the source of truth once it exists. Items marked **(proposed)** are decisions not yet confirmed by the developer.
 
@@ -16,7 +16,7 @@ Visual reference: the style preview at https://claude.ai/artifact/K5vEpRoi5Pj1N5
 
 *Describes the visual character of the app in words, so new screens feel like they belong.*
 
-Fin Snap should feel calm, quiet and trustworthy: a dark charcoal room with a deep forest-green accent, where the layers that float (bars, modals, toasts) are frosted glass and everything else is solid and easy to read. Corners are soft. It should not feel flashy, neon, or like a trading app; color is used sparingly so that green means "main action" and red means "destructive" or "price went up".
+SnapTrack should feel calm, quiet and trustworthy: a dark charcoal room with a deep forest-green accent, where the layers that float (bars, modals, toasts) are frosted glass and everything else is solid and easy to read. Corners are soft. It should not feel flashy, neon, or like a trading app; color is used sparingly so that green means "main action" and red means "destructive" or "price went up".
 
 - **Theme.** Dark and light, from the same role-named tokens (see "Theme tokens" and "Light theme colors"). The app follows the device setting (`prefers-color-scheme`) by default, and each person can choose Dark, Light or System in Settings. Dark is the base design; light is a swap of token values.
 - **Surfaces.** Solid, layered charcoal for the page, cards, tables and lists. Frosted glass only on floating layers: top bar, tab bar, modals, sheets, toasts. See "Surfaces".

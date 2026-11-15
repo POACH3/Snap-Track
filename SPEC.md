@@ -1,12 +1,12 @@
-# Fin Snap — Specification
+# SnapTrack — Specification
 
-This document defines what Fin Snap is for, how it is built, and the order it is built in. The [README](README.md) is the public summary; this is the working reference. When a decision here changes, update this file in the same change.
+This document defines what SnapTrack is for, how it is built, and the order it is built in. The [README](README.md) is the public summary; this is the working reference. When a decision here changes, update this file in the same change.
 
 ---
 
 ## 1. Goals
 
-Fin Snap is a household expense tracker. A photo of a paper receipt goes in; structured, categorized, line-item expense data comes out, and that data is turned into monthly breakdowns and trends.
+SnapTrack is a household expense tracker. A photo of a paper receipt goes in; structured, categorized, line-item expense data comes out, and that data is turned into monthly breakdowns and trends.
 
 ### Primary goals
 1. **See where money goes.** Monthly spending broken down by store, by item, and by category, plus how those change over time.
@@ -133,7 +133,7 @@ Every fake adapter lives next to its port and is reused by all tests (no per-tes
 ```
  Phone (browser / installed PWA)                 Home server
 ┌───────────────────────────────┐   HTTPS via   ┌──────────────────────────────┐    ┌──────────────────────┐
-│ React PWA                     │   Tailscale   │ Fin Snap server (native)     │    │ LLM server (existing,│
+│ React PWA                     │   Tailscale   │ SnapTrack server (native)    │    │ LLM server (existing,│
 │  - camera capture             │ ────────────► │  - auth / sessions           │    │ shared; native)      │
 │  - image resize/compress      │               │  - receipt upload            │    │  relay → oMLX        │
 │  - IndexedDB upload queue     │ ◄──────────── │  - extraction job runner ────┼──► │  one model loaded    │
@@ -144,18 +144,18 @@ Every fake adapter lives next to its port and is reused by all tests (no per-tes
 ```
 
 ### 4.1 Components
-- **Client (PWA).** Single-page React app, installable to the home screen, responsive from phone to desktop (§1, Devices). Handles capture, offline queueing, review, and visualization. Contains no business rules beyond input validation. Served by the Fin Snap server, so there is one origin.
-- **Fin Snap server.** Owns all data and business logic: auth, upload, extraction pipeline, normalization, categorization, analytics.
-- **LLM server (existing, shared).** The household's private LLM server already runs on the same Mac (the separate LLM-Server project, owned by the developer: a relay in front of oMLX, which runs MLX models natively on the GPU). It serves chat models to other people and holds **one model in memory at a time**, so larger models fit and the machine keeps memory free for other work; switching models takes roughly 8–13 seconds. Fin Snap does not install or own it. Fin Snap reaches it over its network port through one port in code, `ReceiptExtractor`: send a receipt image to the vision model and get structured data back.
+- **Client (PWA).** Single-page React app, installable to the home screen, responsive from phone to desktop (§1, Devices). Handles capture, offline queueing, review, and visualization. Contains no business rules beyond input validation. Served by the SnapTrack server, so there is one origin.
+- **SnapTrack server.** Owns all data and business logic: auth, upload, extraction pipeline, normalization, categorization, analytics.
+- **LLM server (existing, shared).** The household's private LLM server already runs on the same Mac (the separate LLM-Server project, owned by the developer: a relay in front of oMLX, which runs MLX models natively on the GPU). It serves chat models to other people and holds **one model in memory at a time**, so larger models fit and the machine keeps memory free for other work; switching models takes roughly 8–13 seconds. SnapTrack does not install or own it. SnapTrack reaches it over its network port through one port in code, `ReceiptExtractor`: send a receipt image to the vision model and get structured data back.
 
-  The relay, not Fin Snap, decides when to switch to the vision model and when to switch back. Fin Snap's requests are low priority: they wait while anyone is chatting and may be interrupted by a chat (§6.3.1).
+  The relay, not SnapTrack, decides when to switch to the vision model and when to switch back. SnapTrack's requests are low priority: they wait while anyone is chatting and may be interrupted by a chat (§6.3.1).
 - **Job runner.** In-process background queue behind the `JobQueue` port. Jobs are persisted in the database so a restart resumes them.
-- **Storage.** SQLite database file plus an image directory in the Fin Snap account's data folder (§4.7), each behind its own port.
+- **Storage.** SQLite database file plus an image directory in the SnapTrack account's data folder (§4.7), each behind its own port.
 - **Network.** Tailscale provides private access from phones anywhere and a valid HTTPS certificate (required for PWA install, service workers, and camera access).
 
 ### 4.2 Repository layout
 ```
-fin-snap/
+snap-track/
 ├── apps/
 │   ├── server/
 │   │   └── src/
@@ -235,7 +235,7 @@ Modules communicate only through each other's `index.ts`. When the `receipts` mo
 ### 4.5 Configuration
 Read from `.env` (checked-in `.env.example`), validated at startup:
 - `LLM_SERVER_URL` — the LLM server relay's address and port (e.g. `http://127.0.0.1:<relay port>`)
-- `LLM_SERVER_API_KEY` — Fin Snap's own key for the LLM server, so its usage is recorded under its own name
+- `LLM_SERVER_API_KEY` — SnapTrack's own key for the LLM server, so its usage is recorded under its own name
 - `EXTRACTION_MODEL` — the vision model's name as the LLM server knows it
 - `EXTRACTION_TIMEOUT_MS`
 - `DATABASE_PATH`, `IMAGE_DIR`
@@ -251,46 +251,46 @@ Read from `.env` (checked-in `.env.example`), validated at startup:
 | Storage | 1 TB SSD |
 
 What this means for the design:
-- **Both services run natively** on this Mac (oMLX uses the GPU through Metal, which Docker on macOS cannot reach). Fin Snap reaches the LLM server at `127.0.0.1`. Hosting and isolation are in §4.7.
+- **Both services run natively** on this Mac (oMLX uses the GPU through Metal, which Docker on macOS cannot reach). SnapTrack reaches the LLM server at `127.0.0.1`. Hosting and isolation are in §4.7.
 - **Model size budget:** the LLM server loads one model at a time, so the vision model gets the GPU memory the chat model was using. Vision models up to roughly 32B parameters fit comfortably at 4-bit (about 20–25 GB; the current chat models use 19–26 GB). Larger models (~70B) technically fit but are likely too slow to be worth it; the Stage 3 evaluation decides.
 - **Speed:** expect seconds per receipt for small models and tens of seconds for ~32B models. Extraction is asynchronous, so this never blocks capture.
-- **Always on:** the Mac must not sleep (Energy settings: prevent automatic sleep; start after power failure). Fin Snap, the LLM server, and Tailscale start at boot with no one logged in (§4.7); FileVault is off so a restart needs no password. While the LLM server is stopped, extraction jobs simply wait.
+- **Always on:** the Mac must not sleep (Energy settings: prevent automatic sleep; start after power failure). SnapTrack, the LLM server, and Tailscale start at boot with no one logged in (§4.7); FileVault is off so a restart needs no password. While the LLM server is stopped, extraction jobs simply wait.
 - **Storage:** at ~0.5 MB per resized receipt image, 1 TB is effectively unlimited even if images are kept forever. Image retention (§6.8) is a privacy and tidiness choice, not a disk-space need.
 - **Backups:** the nightly backup (§10) can target an external drive, and can also be covered by Time Machine.
 
 ### 4.7 Hosting and isolation
-Fin Snap runs natively on the Mac, not in Docker. Its data stays in plain files (simple backups and restores), no virtual machine holds memory the models could use, and it starts at boot. Separation comes from macOS accounts instead of a container.
+SnapTrack runs natively on the Mac, not in Docker. Its data stays in plain files (simple backups and restores), no virtual machine holds memory the models could use, and it starts at boot. Separation comes from macOS accounts instead of a container.
 
 **Accounts**
-- Each service has its own **standard (non-admin) macOS account**: one for Fin Snap (e.g. `finsnap`), one for the LLM server. Neither can install software, change system settings, or read the other's files. They talk only over `localhost`.
-- The developer's own admin account does setup, restarts, and fixes, but never runs Fin Snap or installs its packages.
+- Each service has its own **standard (non-admin) macOS account**: one for SnapTrack (e.g. `snaptrack`), one for the LLM server. Neither can install software, change system settings, or read the other's files. They talk only over `localhost`.
+- The developer's own admin account does setup, restarts, and fixes, but never runs SnapTrack or installs its packages.
 - No one logs in to the service accounts day to day.
 
 **Files and permissions**
-- Fin Snap's code, data (database, images, imported files, backups), and `.env` live in folders owned by the Fin Snap account that only it can open: `chmod 700` on folders, `600` on `.env`.
+- SnapTrack's code, data (database, images, imported files, backups), and `.env` live in folders owned by the SnapTrack account that only it can open: `chmod 700` on folders, `600` on `.env`.
 - macOS home folders are partly visible to other accounts by default, so this is checked with `ls -le` after setup, not assumed.
 
 **Starting at boot**
-- Fin Snap runs as a **LaunchDaemon** (in `/Library/LaunchDaemons/`, with `UserName` set to the Fin Snap account and `KeepAlive` on), so it starts at boot with no one logged in and restarts if it crashes. A LaunchAgent starts only at login, so it is not used.
+- SnapTrack runs as a **LaunchDaemon** (in `/Library/LaunchDaemons/`, with `UserName` set to the SnapTrack account and `KeepAlive` on), so it starts at boot with no one logged in and restarts if it crashes. A LaunchAgent starts only at login, so it is not used.
 - The LLM server runs the same way under its own account (set up in the LLM-Server project). Whether oMLX gets the GPU when started this way, with no one logged in, is tested before relying on it (§12).
 - Tailscale must also connect at boot with no one logged in; checked in Stage 0 (§12).
 - **FileVault is off.** With it on, the Mac stops at the unlock screen after a power cut and nothing starts until someone types a password. The trade-off is that someone who takes the Mac can read its disk (§13); backup drives are encrypted to limit this (§10).
 
 **Supply-chain protection** (a bad npm package is the most likely threat)
 - **Install scripts are blocked.** pnpm (version 10 or later) runs no dependency install scripts except those named in `pnpm.onlyBuiltDependencies` in `package.json` (e.g. `better-sqlite3`, which needs one for its native binary). Adding a package to that list needs the developer's approval, like adding any dependency.
-- **Installs use the lockfile** (`pnpm install --frozen-lockfile`) and run as the Fin Snap account, never as an admin.
-- **Outgoing internet is blocked for the Fin Snap account.** It may reach only `localhost` (the LLM relay) and Tailscale; everything else is refused, so even compromised code cannot send data out of the home network. During a deploy, the package registry and the code host are allowed for the install step only, then blocked again. The tool that enforces this (macOS's built-in `pf` firewall with per-user rules, or Little Snitch) is chosen in Stage 0 (§12). The LLM server account gets the same rule in its own project.
+- **Installs use the lockfile** (`pnpm install --frozen-lockfile`) and run as the SnapTrack account, never as an admin.
+- **Outgoing internet is blocked for the SnapTrack account.** It may reach only `localhost` (the LLM relay) and Tailscale; everything else is refused, so even compromised code cannot send data out of the home network. During a deploy, the package registry and the code host are allowed for the install step only, then blocked again. The tool that enforces this (macOS's built-in `pf` firewall with per-user rules, or Little Snitch) is chosen in Stage 0 (§12). The LLM server account gets the same rule in its own project.
 
 **Runtime**
 - The Node version is pinned in the repo (`.node-version`, read by `mise`, plus `engines` in `package.json`), and the service runs that exact version.
-- System libraries Fin Snap needs (e.g. for HEIC conversion, §12) are installed with Homebrew from the admin account and listed in `deploy/` setup notes.
+- System libraries SnapTrack needs (e.g. for HEIC conversion, §12) are installed with Homebrew from the admin account and listed in `deploy/` setup notes.
 
 **Network**
-- Fin Snap listens only on `127.0.0.1`. `tailscale serve` provides HTTPS on the Tailscale address and forwards to it. Nothing listens on the local network or the internet.
+- SnapTrack listens only on `127.0.0.1`. `tailscale serve` provides HTTPS on the Tailscale address and forwards to it. Nothing listens on the local network or the internet.
 
 **Production and development**
-- **Production:** the `fin-snap` LaunchDaemon, with its own data folder and port.
-- **Development** on the Mac Studio, if used: a second LaunchDaemon (`fin-snap-dev`) with its own data folder, database, image folder, port, and Tailscale HTTPS port. It never shares files with production. Day-to-day development runs `pnpm dev` on the developer's own machine.
+- **Production:** the `snaptrack` LaunchDaemon, with its own data folder and port.
+- **Development** on the Mac Studio, if used: a second LaunchDaemon (`snaptrack-dev`) with its own data folder, database, image folder, port, and Tailscale HTTPS port. It never shares files with production. Day-to-day development runs `pnpm dev` on the developer's own machine.
 - **Deploy** is one script (`deploy/deploy.sh`): fetch the code, install with the lockfile (registry allowed for this step only), build, run migrations (with the developer's go-ahead), and restart the daemon. Restarting a LaunchDaemon needs admin rights, so that step runs from the admin account.
 
 ---
@@ -488,19 +488,19 @@ Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainme
    - Date is not in the future and not unreasonably old.
 5. On success, normalization runs (§6.4) and the receipt moves to `unreviewed`. From this point it counts toward analytics.
 6. Transient errors (timeout, server error) retry with backoff, up to 5 attempts. Waiting for the LLM server (busy, interrupted by a chat, or offline) does not count as an attempt; nothing is lost.
-7. Receipts are sent one at a time, so the LLM server is never asked to do more than one thing for Fin Snap at once.
+7. Receipts are sent one at a time, so the LLM server is never asked to do more than one thing for SnapTrack at once.
 
 #### 6.3.1 Sharing the LLM server
-The LLM server is shared with people chatting, holds one model at a time, and swapping models costs ~8–13 seconds each way. Receipt reading is low priority: it can wait, and it can be interrupted, as long as every receipt is eventually read. **The LLM server's relay decides when to switch models; Fin Snap never loads, unloads, or switches a model itself.** The low-priority support below is built in the LLM-Server project (owned by the developer).
+The LLM server is shared with people chatting, holds one model at a time, and swapping models costs ~8–13 seconds each way. Receipt reading is low priority: it can wait, and it can be interrupted, as long as every receipt is eventually read. **The LLM server's relay decides when to switch models; SnapTrack never loads, unloads, or switches a model itself.** The low-priority support below is built in the LLM-Server project (owned by the developer).
 
-**What Fin Snap needs from the relay:**
-1. **Low-priority requests.** Fin Snap marks its extraction requests as low priority (a header or a separate endpoint, chosen in the LLM-Server project). Otherwise they are ordinary OpenAI-compatible chat requests naming the vision model.
+**What SnapTrack needs from the relay:**
+1. **Low-priority requests.** SnapTrack marks its extraction requests as low priority (a header or a separate endpoint, chosen in the LLM-Server project). Otherwise they are ordinary OpenAI-compatible chat requests naming the vision model.
 2. **The relay schedules them.** It runs a low-priority request only when no chat is running and the server isn't reserved, switching to the vision model first. While low-priority requests keep arriving and no one is chatting, it keeps the vision model loaded, so the swap is paid once per run of receipts, not per receipt. When they stop, or a chat arrives, it switches back to the model that was loaded before.
 3. **Chat comes first.** When a chat request arrives while a receipt is being read, the relay may cancel the receipt and reply **interrupted**.
 4. **A clear "not now".** If the relay won't run the request soon (server in use, reserved, or switching away), it replies **busy** with a suggested retry time, rather than holding the request indefinitely.
-5. **Distinct replies.** Busy and interrupted each have their own response (status code, and `Retry-After` for busy), separate from real errors, so Fin Snap can tell "try again later" from "this failed". The exact codes are set in the LLM-Server project and handled only in the `ReceiptExtractor` adapter.
+5. **Distinct replies.** Busy and interrupted each have their own response (status code, and `Retry-After` for busy), separate from real errors, so SnapTrack can tell "try again later" from "this failed". The exact codes are set in the LLM-Server project and handled only in the `ReceiptExtractor` adapter.
 
-**Fin Snap's side** (an application-layer use case; all LLM server access goes through the `ReceiptExtractor` port):
+**SnapTrack's side** (an application-layer use case; all LLM server access goes through the `ReceiptExtractor` port):
 1. Take the next pending extraction job whose `next_attempt_at` has passed (oldest first). Nothing happens while the queue is empty.
 2. Send it to the relay as a low-priority request.
 3. On success, validate and save the result (§6.3 steps 3–5).
@@ -508,9 +508,9 @@ The LLM server is shared with people chatting, holds one model at a time, and sw
 5. On a real error (timeout, server error, invalid output), count an attempt and retry with backoff (§6.3 steps 3 and 6).
 6. Send one receipt at a time, waiting for each answer before sending the next.
 
-Fin Snap's job queue is the only record of what still needs reading; the relay holds nothing between requests. A restart of either side loses nothing: Fin Snap's jobs are persisted (§4.1), and an interrupted or unanswered request is simply sent again.
+SnapTrack's job queue is the only record of what still needs reading; the relay holds nothing between requests. A restart of either side loses nothing: SnapTrack's jobs are persisted (§4.1), and an interrupted or unanswered request is simply sent again.
 
-**Access through the relay, not oMLX directly**, with Fin Snap's own API key, so the LLM server records Fin Snap's usage under its own name.
+**Access through the relay, not oMLX directly**, with SnapTrack's own API key, so the LLM server records SnapTrack's usage under its own name.
 
 **Model choice.** Decided in Stage 3 with an evaluation harness (a script plus a fixture set of 20+ real household receipts with hand-checked correct answers). It scores each candidate on field accuracy and time per receipt. Candidates:
 - Vision-language models in MLX format that oMLX supports (oMLX runs vision models through `mlx-vlm`, so support depends on the architecture; check oMLX's release notes for each candidate and use a recent oMLX version): e.g. Qwen2.5-VL / Qwen3-VL, Gemma 4 (vision), Llama 3.2 Vision, from ~7B up to ~32B at 4-bit (the host's comfortable limit; §4.6).
@@ -640,7 +640,7 @@ Over time, stores and repeat purchases are matched by identifier, with no model 
   - The same nightly job, domain function, warnings, and confirmation on shortening apply.
 
 ### 6.9 Retailer CSV import
-For online purchases that come with no paper receipt (Amazon first). The user downloads their purchase history report from the retailer and uploads it in Fin Snap (Import → choose retailer → choose or drag in the file). Designed for desktop, where this is normally done, but works on a phone too. Requires a connection; it is not queued offline.
+For online purchases that come with no paper receipt (Amazon first). The user downloads their purchase history report from the retailer and uploads it in SnapTrack (Import → choose retailer → choose or drag in the file). Designed for desktop, where this is normally done, but works on a phone too. Requires a connection; it is not queued offline.
 
 **Format definitions.** Each retailer's report is described by one format definition (`imports/formats/<retailer>.ts`), validated by a shared Zod schema. A definition says:
 - How to recognize the file (expected header columns), so a wrong file or a retailer changing its layout is caught with a clear message.
@@ -738,7 +738,7 @@ All analytics are read-only SQL queries over receipts that count (`unreviewed` a
 
 ## 8. Export
 
-All household data can be exported at any time, by any household member. Nothing is locked into Fin Snap. Owned by the `export` module, which (like `analytics`) reads every module's tables and writes none.
+All household data can be exported at any time, by any household member. Nothing is locked into SnapTrack. Owned by the `export` module, which (like `analytics`) reads every module's tables and writes none.
 
 ### 8.1 Full export
 From Settings → **Export all data**. Produces one ZIP file:
@@ -773,10 +773,10 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 
 ## 9. Security and Privacy
 
-- **Network:** the Fin Snap server listens only on `127.0.0.1`, reached from household devices through `tailscale serve`; the LLM server listens only on the Mac itself (per its own project). Neither is exposed to the internet. Fin Snap's LLM server API key lives in `.env` only.
-- **Isolation:** Fin Snap runs under its own standard macOS account with private folders, blocked install scripts, and outgoing internet blocked (§4.7).
+- **Network:** the SnapTrack server listens only on `127.0.0.1`, reached from household devices through `tailscale serve`; the LLM server listens only on the Mac itself (per its own project). Neither is exposed to the internet. SnapTrack's LLM server API key lives in `.env` only.
+- **Isolation:** SnapTrack runs under its own standard macOS account with private folders, blocked install scripts, and outgoing internet blocked (§4.7).
 - **Auth:** username and password per household member, hashed with Argon2. Login sets an HTTP-only, Secure, SameSite cookie session. No public sign-up; an admin command (or first-run setup) creates users.
-- **Secrets:** `.env` is git-ignored and readable only by the Fin Snap account (`600`).
+- **Secrets:** `.env` is git-ignored and readable only by the SnapTrack account (`600`).
 - **Data leaving the network:** none.
 - **Image retention:** households can limit how long receipt images are kept (§6.8).
 - **On the phone:** queued images stay in IndexedDB only until uploaded. Logging out clears the queue after warning about any receipts not yet uploaded.
@@ -786,10 +786,10 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 ## 10. Backups
 
 - Everything lives in two places: the SQLite file and the image directory.
-- A nightly job uses SQLite's online backup to make a safe copy in the Fin Snap backup folder, copies new images alongside it, and keeps the last 14 nights. It can also copy them to an external drive.
+- A nightly job uses SQLite's online backup to make a safe copy in the SnapTrack backup folder, copies new images alongside it, and keeps the last 14 nights. It can also copy them to an external drive.
 - Time Machine covers the backup folder. It may copy the live database file mid-write, so restores always use the nightly copies, never Time Machine's copy of the live file.
 - Backup drives (Time Machine and external) are encrypted, since the Mac's own disk is not (FileVault is off; §4.7).
-- Restore = stop the Fin Snap service, put the files back, start the service. Documented and tested once in Stage 5.
+- Restore = stop the SnapTrack service, put the files back, start the service. Documented and tested once in Stage 5.
 
 ---
 
@@ -798,8 +798,8 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 Each stage ends in something that runs and is verified. A stage is done when its **Done when** items are tested, not just written, **and `pnpm check` passes**.
 
 ### Stage 0 — Scaffold and quality gates
-**Build:** monorepo with `apps/server`, `apps/web`, `packages/contracts`, `packages/core`; strict TypeScript, ESLint, Prettier, Vitest; dependency-cruiser rules for §3.1; `pnpm check`; config loader with validation; structured logging; Fastify serving the built React app; SQLite + Drizzle with a first migration; `.env.example`; first ADR recording this architecture; hosting per §4.7: the Fin Snap account, private folders, LaunchDaemon, Node version pin, install-script allowlist, outgoing-internet block, `tailscale serve`, deploy script, and setup notes in `deploy/`.
-**Done when:** after a reboot with no one logged in, the Fin Snap LaunchDaemon serves a placeholder page over HTTPS at the Tailscale address from a phone, and it installs to the home screen; a deliberate boundary violation (e.g. a domain file importing Fastify) makes `pnpm check` fail; a dependency install script not on the allowlist does not run; an outgoing internet request from the Fin Snap account is refused while `localhost` still works; another standard account cannot read Fin Snap's data folder or `.env`.
+**Build:** monorepo with `apps/server`, `apps/web`, `packages/contracts`, `packages/core`; strict TypeScript, ESLint, Prettier, Vitest; dependency-cruiser rules for §3.1; `pnpm check`; config loader with validation; structured logging; Fastify serving the built React app; SQLite + Drizzle with a first migration; `.env.example`; first ADR recording this architecture; hosting per §4.7: the SnapTrack account, private folders, LaunchDaemon, Node version pin, install-script allowlist, outgoing-internet block, `tailscale serve`, deploy script, and setup notes in `deploy/`.
+**Done when:** after a reboot with no one logged in, the SnapTrack LaunchDaemon serves a placeholder page over HTTPS at the Tailscale address from a phone, and it installs to the home screen; a deliberate boundary violation (e.g. a domain file importing Fastify) makes `pnpm check` fail; a dependency install script not on the allowlist does not run; an outgoing internet request from the SnapTrack account is refused while `localhost` still works; another standard account cannot read SnapTrack's data folder or `.env`.
 
 ### Stage 1 — Accounts
 **Build:** `auth` module (users, sessions, login/logout, route protection); admin command to create users.
@@ -812,7 +812,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 ### Stage 3 — Extraction
 **Build:** extraction schema in `contracts`; `extraction` module; `JobQueue` port with persisted SQLite adapter; `ReceiptExtractor` port with LLM-server adapter and fake, including busy / interrupted replies; the extraction loop (§6.3.1); consistency checks; low-priority request support in the relay (built in the LLM-Server project, §6.3.1); vision model added to the LLM server.
 **Model evaluation:** build the evaluation harness and fixture set; compare candidate models (§6.3); record the choice in an ADR.
-**Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; an unreadable image ends up `review_required`; a Fin Snap restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. While the relay replies busy, jobs wait without using up attempts and complete once it is free. A receipt interrupted by a chat goes back to the queue and is completed later, and interruptions never count toward the 5-attempt limit. (That the relay switches back to the previous model, and puts chat ahead of receipts, is tested in the LLM-Server project.)
+**Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; an unreadable image ends up `review_required`; a SnapTrack restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. While the relay replies busy, jobs wait without using up attempts and complete once it is free. A receipt interrupted by a chat goes back to the queue and is completed later, and interruptions never count toward the 5-attempt limit. (That the relay switches back to the previous model, and puts chat ahead of receipts, is tested in the LLM-Server project.)
 
 ### Stage 4 — Review and log
 **Build:** `catalog` module (stores, items, categories with defaults, store and item identifiers, store identification, matching, learning, store detail screen with its Identifiers list); hierarchy editor (L1–L4: add, rename, move, archive, merge); hierarchy picker showing the full path (e.g. "Groceries › Frozen foods › Ice cream"); free tags; item naming and tagging from the review screen and an Items screen; side-by-side image/data component with zoom; review screen; receipt detail view (same component); manual entry with quick and full modes (same form component, §6.6); store/item pickers; confirm flow; duplicate warning.
@@ -874,7 +874,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 |---|---|
 | A local model is less accurate than large hosted models. | Evaluation harness picks the best model that fits; required review step; consistency checks; OCR + text model fallback adapter; identifier learning reduces reliance on the model over time. |
 | Extraction is slow on modest hardware. | Extraction is asynchronous, so capture is never blocked; images are resized; jobs run one at a time. |
-| Fin Snap disrupts people chatting on the shared LLM server, or leaves it on the wrong model. | Fin Snap never switches models; the relay does. It runs receipts only when no one is chatting and the server isn't reserved, interrupts them when a chat arrives, and switches back afterward. Interrupted receipts go back to Fin Snap's queue without using up attempts. |
+| SnapTrack disrupts people chatting on the shared LLM server, or leaves it on the wrong model. | SnapTrack never switches models; the relay does. It runs receipts only when no one is chatting and the server isn't reserved, interrupts them when a chat arrives, and switches back afterward. Interrupted receipts go back to SnapTrack's queue without using up attempts. |
 | A busy LLM server delays extraction for a long time. | Receipts wait safely in the queue; the receipts list shows "waiting for the model server". Unreviewed counting starts once extraction finishes. |
 | iOS clears PWA storage after long inactivity, losing queued receipts. | Upload as soon as possible; show the pending count; warn when a receipt has been queued for more than a day. |
 | Item matching gets messy (same item, many spellings and sizes). | Per-company item identifiers, matched by item code first; merge tool for canonical items; raw text is kept so items can be re-mapped later. |

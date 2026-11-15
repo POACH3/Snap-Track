@@ -1,4 +1,4 @@
-# Fin Snap agent instructions
+# SnapTrack agent instructions
 
 Shared instructions for all coding agents (Claude Code, Codex, and others).
 Claude Code reads this through `CLAUDE.md`, which imports it.
@@ -74,7 +74,7 @@ Before starting any multi-step build, always include a verification plan as part
 
 Here's how this repo is structured. Always check here before assuming.
 
-Fin Snap is a household receipt and expense tracker: a TypeScript pnpm monorepo with a React + Vite PWA client and a Fastify server (SQLite + Drizzle) running natively on the Mac Studio as a macOS service (LaunchDaemon) under its own account, using ports and adapters, reached from phones over Tailscale HTTPS, with receipt extraction done by a vision model on the household's existing LLM server.
+SnapTrack is a household receipt and expense tracker: a TypeScript pnpm monorepo with a React + Vite PWA client and a Fastify server (SQLite + Drizzle) running natively on the Mac Studio as a macOS service (LaunchDaemon) under its own account, using ports and adapters, reached from phones over Tailscale HTTPS, with receipt extraction done by a vision model on the household's existing LLM server.
 
 Folders marked *(Stage 0)* do not exist yet; they are created when the scaffold is built (`SPEC.md` §4.2 and §11).
 
@@ -172,11 +172,11 @@ Stage 0 scaffold adds them to `package.json`.
   `DATABASE_PATH` file); see `.claude/rules/database-commands.md`.
 - Any call that loads, unloads or switches models on the shared LLM server;
   other people use it for chat (`SPEC.md` §4.1).
-- Anything that changes the running production Fin Snap server on the Mac
-  Studio: deploying to it, restarting its `fin-snap` LaunchDaemon, copying
+- Anything that changes the running production SnapTrack server on the Mac
+  Studio: deploying to it, restarting its `snaptrack` LaunchDaemon, copying
   files into its data folder, or running migrations against its database.
   Before running, name the target (production) and what will change. The
-  development service (`fin-snap-dev`, with its own data folder, database and
+  development service (`snaptrack-dev`, with its own data folder, database and
   image folder) is separate and follows the `launchctl` and deploy rule above.
 - `git pull` (which can do either a merge or a rebase): it combines history.
   Enforced in Claude Code via `permissions.ask`.
