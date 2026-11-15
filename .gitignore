@@ -1,0 +1,41 @@
+# Secrets: every .env file except the example
+.env*
+!.env.example
+
+# Claude Code personal settings
+.claude/settings.local.json
+
+# macOS
+.DS_Store
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+dev-dist/
+*.tsbuildinfo
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+
+# Local data: database and receipt images (private household data)
+data/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Logs
+*.log
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
