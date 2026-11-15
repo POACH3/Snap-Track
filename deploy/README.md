@@ -50,7 +50,7 @@ Tailscale address and a fresh `SESSION_SECRET`. It never shows the secret. **Sav
 | Logs | `sudo tail -f /opt/snap-track/logs/snaptrack.log` |
 | Restart SnapTrack | `sudo launchctl kickstart -k system/snaptrack` |
 | Restart the Mac (unattended) | `sudo fdesetup authrestart` (unlocks FileVault once, so services start with no login) |
-| After a power cut | Unlock the Mac at its screen; the services then start by themselves |
+| After any restart | Log in to the Mac (after a power cut, unlocking FileVault does this). Tailscale starts at login; SnapTrack is already running. |
 | Stop / start | `sudo launchctl bootout system/snaptrack` / `sudo launchctl bootstrap system /Library/LaunchDaemons/snaptrack.plist` |
 | Firewall state | `sudo /opt/snap-track/firewall/firewall.sh status` |
 | Check permissions and firewall | `sudo deploy/setup.sh --check` |
@@ -99,11 +99,10 @@ Record the date and result next to each.
       it, then `sudo -u _snaptrack curl -m 5 https://example.com` must fail.
 - [ ] Rollback: deploy commit A, deploy commit B, `--rollback`; the app is A again.
 - [x] 2026-11-15: `pf` per-user rules work on macOS 27.0.1 (the setup check covers it).
-- [ ] **Reboot with no one logged in** (`sudo fdesetup authrestart`); from a phone, open the production address. If it
-      doesn't load, check in this order: `snaptrack` running (`sudo launchctl print
-      system/snaptrack`), the firewall (`firewall.sh status`), then Tailscale. If Tailscale
-      is what's missing, the standalone app does not connect before login; the fix is the
-      open-source `tailscaled` as a LaunchDaemon (it also affects the LLM server).
+- [x] 2026-11-15: **Reboot** (`sudo fdesetup authrestart`): `snaptrack` started 7 seconds
+      after boot with no one logged in, firewall on. Tailscale (the standalone app) started
+      only at login, so the app is reachable from phones once someone logs in. Accepted:
+      **after any restart, log in to the Mac** (`SPEC.md` §4.7).
 - [x] 2026-11-15: The app installs to the home screen on an iPhone and an Android phone.
 - [x] 2026-11-15: Each household member logs in from their own phone (Stage 1).
 
