@@ -1,7 +1,7 @@
 # Stage 0: scaffold, quality gates and hosting
 
 **Changes SPEC.md:** §4.5 Configuration, §4.7 Hosting and isolation, §9 Security and Privacy, §10 Backups, §11 Stage 0, §12 Open Questions, §13 Risks.  
-**Status:** active (steps 1–8 done on `main`, uncommitted; hosting steps 9–11 and experiments E1–E2 not started).
+**Status:** active (steps 1–8 done; steps 9–11 written in `deploy/`, waiting for the developer to run them; E1–E2 are checks in `deploy/README.md`).
 
 Builds everything in `SPEC.md` §11 Stage 0: the monorepo and its quality gates,
 a placeholder app served by Fastify, the first migration, and production hosting
@@ -52,8 +52,13 @@ Decided 2026-11-15, while reviewing the plan against the machine as it is set up
 
 - **Done:** steps 1–8, experiments E3 and E4. `pnpm check` and `pnpm build` pass
   (42 tests). A domain file importing Fastify makes `pnpm check` fail.
-- **Not started:** E1 (firewall), E2 (Tailscale at boot), steps 9–11 (host setup,
-  Tailscale, deploy). These wait until hosting is needed.
+- **Written, not yet run:** steps 9–11 as `deploy/setup.sh`, `deploy/deploy.sh`,
+  `deploy/admin.sh` and `deploy/firewall/` (they need `sudo`, so the developer runs
+  them). E1 and E2 are checks in `deploy/README.md`.
+- **Found while writing them:** HTTPS 443 on the Tailscale name is already the LLM
+  server's chat page, so SnapTrack uses 8443. Tailscale is the standalone app, so boot
+  without login must be tested. The server now refuses to start if it can reach the
+  internet (`start-production.ts`), so a missing firewall at boot fails closed.
 - **Changed from the plan while building:**
   - No `tsx` and no server build: Node 26 runs the server's TypeScript directly
     (ADR 0003). The LaunchDaemon runs `app/current/apps/server/src/main.ts`.

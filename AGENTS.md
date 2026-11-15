@@ -76,8 +76,6 @@ Here's how this repo is structured. Always check here before assuming.
 
 SnapTrack is a household receipt and expense tracker: a TypeScript pnpm monorepo with a React + Vite PWA client and a Fastify server (SQLite + Drizzle) running natively on the Mac Studio as a macOS service (LaunchDaemon) under its own account, using ports and adapters, reached from phones over Tailscale HTTPS, with receipt extraction done by a vision model on the household's existing LLM server.
 
-Folders marked *(not yet)* are planned but do not exist yet (`docs/feature-plans/stage-0-scaffold-plan.md`).
-
 ```
 project_root/
 ├── AGENTS.md, CLAUDE.md, README.md, SPEC.md
@@ -92,7 +90,7 @@ project_root/
 ├── docs/                    # README.md (doc directory), DESIGN.md (UI style guide), TESTING.md, BUGS.md, REFACTOR.md
 │   ├── feature-plans/       # one plan per feature; README.md is the registry
 │   └── adr/                 # architecture decision records; README.md is the index
-├── deploy/                  # (not yet) LaunchDaemon definition, setup and deploy scripts, firewall rules, setup notes (`SPEC.md` §4.7)
+├── deploy/                  # production hosting: setup.sh, deploy.sh, admin.sh, firewall/ (pf rules), README.md (steps and checks; `SPEC.md` §4.7)
 └── .claude/                 # Claude Code only: settings.json (shared permissions), rules/ (agent rules); settings.local.json is personal and git-ignored
 ```
 
@@ -141,7 +139,7 @@ Other agents: follow everything in `.claude/rules/` and the `permissions.deny` a
 - Format: `pnpm format` (writes files; `.claude/` is excluded in `.prettierignore`)
 - Tests only: `pnpm test`; end-to-end: `pnpm test:e2e` (Playwright; not set up until Stage 2)
 - Build: `pnpm build` (builds the web app; the server runs its TypeScript directly)
-- Deploy: `deploy/deploy.sh` (not written yet; ask first, see below)
+- Deploy: `sudo deploy/deploy.sh` (production; the developer runs it; see `deploy/README.md`). Host setup: `sudo deploy/setup.sh`; production users: `sudo deploy/admin.sh user:create`
 - Database: `pnpm db:generate` (create a migration from schema changes), `pnpm db:migrate` (apply migrations)
 - Users: `pnpm user:create`, `pnpm user:set-password` (prompt for details; change the database in `DATABASE_PATH`)
 

@@ -1,0 +1,10 @@
+# SnapTrack's outgoing-internet block (SPEC.md §4.7, ADR 0004).
+# Loaded into the pf anchor "com.apple/300.SnapTrack", which the stock /etc/pf.conf
+# already evaluates ("anchor com.apple/*"), so /etc/pf.conf is never edited.
+#
+# The _snaptrack account may talk only to this Mac: the LLM relay and `tailscale serve`
+# both connect over 127.0.0.1. Everything else it sends out is refused at once
+# ("return", not "drop"), so the server's startup check fails fast instead of timing out.
+
+pass out quick on lo0 all user _snaptrack
+block return out quick all user _snaptrack

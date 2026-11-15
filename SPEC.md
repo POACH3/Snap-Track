@@ -306,14 +306,14 @@ Everything lives under `/opt/snap-track/` (`root:_snaptrack`, `750`):
 - **Install scripts are blocked.** pnpm runs no dependency install scripts except those allowed in `allowBuilds` in `pnpm-workspace.yaml` (pnpm 11; it refuses the install if another package wants one). Today none is allowed: `better-sqlite3` ships prebuilt binaries. Allowing one needs the developer's approval, like adding any dependency.
 - **New releases wait a week.** pnpm's `minimumReleaseAge` is set to 7 days, so a package version published in the last week is never installed. Most malicious releases are found and pulled within days.
 - **Installs use the lockfile** (`pnpm install --frozen-lockfile`) and run as the SnapTrack account in `build/`, never as an admin.
-- **Outgoing internet is blocked for the SnapTrack account.** It may reach only `localhost` (the LLM relay) and Tailscale; everything else is refused, so even compromised code cannot send data out of the home network. During a deploy, outgoing access is opened for the install step only (the package registry), then closed again, even if the step fails. The code itself never comes from the internet: the deploy exports the commit from the admin account's checkout. The tool that enforces this (macOS's built-in `pf` firewall with per-user rules, or Little Snitch) is chosen in Stage 0 (§12). The LLM server account gets the same rule in its own project.
+- **Outgoing internet is blocked for the SnapTrack account.** It may reach only `localhost` (the LLM relay) and Tailscale; everything else is refused, so even compromised code cannot send data out of the home network. During a deploy, outgoing access is opened for the install step only (the package registry), then closed again, even if the step fails. The code itself never comes from the internet: the deploy exports the commit from the admin account's checkout. It is enforced by macOS's built-in `pf` firewall with per-user rules in the anchor `com.apple/300.SnapTrack`, re-applied every minute by a root LaunchDaemon, and the server's production entry point refuses to start while it can reach the internet, before loading any package (ADR 0004, `deploy/README.md`). DNS lookups go through the system resolver and are not covered. The LLM server account gets the same rule in its own project.
 
 **Runtime**
 - The Node and pnpm versions are pinned in the repo (`.node-version`, read by `mise`; `engines` and `packageManager` in `package.json`). Deploy installs exactly those versions into `runtime/` with `mise`, and the LaunchDaemon starts that Node by its full path, so the service never runs whatever `node` happens to be on the system.
 - System libraries SnapTrack needs (e.g. for HEIC conversion, §12) are installed with Homebrew from the admin account and listed in `deploy/` setup notes.
 
 **Network**
-- SnapTrack listens only on `127.0.0.1`. `tailscale serve` provides HTTPS on the Tailscale address and forwards to it. Nothing listens on the local network or the internet.
+- SnapTrack listens only on `127.0.0.1` (production port 4300). `tailscale serve` provides HTTPS on the Tailscale address, port 8443 (`https://node.tailf79c3a.ts.net:8443`; port 443 is the LLM server's chat page), and forwards to it. Nothing listens on the local network or the internet.
 
 **Production and development**
 - **Production:** the `snaptrack` LaunchDaemon (`/Library/LaunchDaemons/snaptrack.plist`), with the folders above and its own port.
@@ -902,7 +902,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 |---|---|
 | Whether two-pass extraction (OCR model + text model) or another vision model beats Qwen3.6-35B-A3B (§6.3). | Stage 9 |
 | The relay's low-priority API: how a request is marked low priority, and the exact busy / interrupted replies (§6.3.1). Built in the LLM-Server project. | Stage 3 |
-| How to block outgoing internet for the service accounts (`pf` per-user rules or Little Snitch), and how to allow the package registry only during deploys (`pf` matches addresses, not domain names, and the registry sits behind a CDN). | Stage 0 |
+| Proposed: `pf` per-user rules, opened for the whole install step during deploys (ADR 0004). Confirm per-user matching works on this macOS version (`deploy/README.md` checks). | Stage 0 |
 | Whether Tailscale connects at boot with no one logged in (the standalone app, or the `tailscaled` daemon). | Stage 0 |
 | How oRPC mounts on Fastify (its adapter or Node handler), and that a receipt image upload works through it end to end. | Stage 0 |
 | Whether oMLX gets the GPU when run as a LaunchDaemon with no one logged in, under its real service account rather than an admin account (tested in the LLM-Server project). | Before Stage 3 |
