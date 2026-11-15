@@ -1,0 +1,10 @@
+# Docs are written by hand; formatting them would rewrap tables and prose.
+*.md
+LICENSE
+# Claude settings are edited only by the developer (.claude/rules/claude-configuration.md).
+.claude/
+pnpm-lock.yaml
+**/dist/
+**/dev-dist/
+apps/server/drizzle/
+coverage/

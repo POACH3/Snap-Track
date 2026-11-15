@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Supply-chain protection (SPEC.md §4.7).
+# Only packages set to true may run install scripts (none need to today);
+# adding one needs the developer's approval. better-sqlite3 ships prebuilt
+# binaries and esbuild ships platform packages, so neither needs its script.
+allowBuilds:
+  better-sqlite3: false
+  esbuild: false
+# Never install a version published less than 7 days ago (in minutes).
+minimumReleaseAge: 10080

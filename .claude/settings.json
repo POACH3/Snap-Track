@@ -15,6 +15,9 @@
       "Read(/.env.example)"
     ],
     "ask": [
+      "Bash(rm:*)",
+      "Bash(rmdir:*)",
+      "Bash(unlink:*)",
       "Bash(git commit:*)",
       "Bash(git -C * commit:*)",
       "Bash(git pull:*)",

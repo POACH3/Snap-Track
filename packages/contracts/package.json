@@ -1,0 +1,16 @@
+{
+  "name": "@snaptrack/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@orpc/contract": "1.16.2",
+    "@snaptrack/core": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

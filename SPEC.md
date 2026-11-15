@@ -241,7 +241,8 @@ Modules communicate only through each other's `index.ts`. When the `receipts` mo
 | Hosting | Native macOS service (LaunchDaemon), no Docker | Runs directly on the Mac under its own hidden service account: data and backups are plain files, no virtual machine holds memory the models could use, and it starts at boot. The LLM server runs the same way, managed by its own project. See §4.7. |
 
 ### 4.5 Configuration
-Read from `.env` (checked-in `.env.example`), validated at startup:
+Read from a `.env` file (variables listed in the checked-in `.env.example`), loaded with Node's built-in `--env-file` and validated at startup. Production reads `/opt/snap-track/config/.env` (§4.7); `pnpm dev` reads `.env` at the repo root.
+- `PORT` — the port SnapTrack listens on, always at `127.0.0.1` (production and development differ)
 - `LLM_SERVER_URL` — the LLM server relay's address and port (e.g. `http://127.0.0.1:<relay port>`)
 - `LLM_SERVER_API_KEY` — SnapTrack's own key for the LLM server, so its usage is recorded under its own name
 - `EXTRACTION_MODEL` — the vision model's name as the LLM server knows it
@@ -270,14 +271,30 @@ What this means for the design:
 SnapTrack runs natively on the Mac, not in Docker. Its data stays in plain files (simple backups and restores), no virtual machine holds memory the models could use, and it starts at boot. Separation comes from macOS accounts instead of a container.
 
 **Accounts**
-- Each service has its own **hidden, non-admin macOS service account** (a "role account", created with `sysadminctl -roleAccount`): `_snaptrack` for SnapTrack, and one for the LLM server. Neither can install software, change system settings, or read the other's files. They talk only over `localhost`.
+- Each service has its own **hidden, non-admin macOS service account**: `_snaptrack` for SnapTrack (uid/gid 411, shell `/usr/bin/false`, hidden), and one for the LLM server. Neither can install software, change system settings, or read the other's files. They talk only over `localhost`.
 - A service account has no password, cannot log in, and does not appear on the login screen. The admin account acts as it only through `sudo -u _snaptrack` (for installs, migrations, and checks).
-- macOS does not create a home folder for a role account. Setup creates one by hand (owned by `_snaptrack`, `chmod 700`), and the LaunchDaemon sets `HOME` to it, since pnpm and Node keep caches there.
+- The account's home folder is `/opt/snap-track/home` (created by hand, since macOS makes none for a service account), and the LaunchDaemon sets `HOME` to it, since pnpm keeps caches there.
 - The developer's own admin account does setup, restarts, and fixes, but never runs SnapTrack or installs its packages.
 
 **Files and permissions**
-- SnapTrack's code, data (database, images, imported files, backups), and `.env` live in folders owned by the SnapTrack account that only it can open: `chmod 700` on folders, `600` on `.env`.
-- macOS home folders are partly visible to other accounts by default, so this is checked with `ls -le` after setup, not assumed.
+
+One rule: **the SnapTrack account can read everything it runs but change none of it; it can write only its data.** So a compromised package running as `_snaptrack` can't alter its own code, its Node runtime, or its configuration, and nothing it changes outlives the next deploy. (It can still read household data, which the service needs; the outgoing-internet block below keeps that data in.)
+
+Everything lives under `/opt/snap-track/` (`root:_snaptrack`, `750`):
+
+| Folder | Owner, mode | Holds |
+|---|---|---|
+| `app/` | `root:_snaptrack`, `750` | `releases/<commit>/`: one folder per deployed release (built code and `node_modules`), and `current`, a link to the release that runs. Rollback is pointing `current` back at an earlier release. |
+| `runtime/` | `root:_snaptrack`, `750` | The pinned Node and pnpm, installed by `mise` from the admin account. Homebrew upgrades never change them. |
+| `config/` | `root:wheel`, `700`, plus an ACL letting `_snaptrack` list it; `.env` is `root:wheel`, `600`, plus an ACL letting `_snaptrack` read it | The production `.env`. Access is granted to the `_snaptrack` user by name, not through the group, so other group members can't read it. Kept out of `data/` so the nightly backups (and the drives they go to) never hold its secrets. |
+| `build/` | `_snaptrack`, `700` | Staging area where a deploy installs and builds, as `_snaptrack`. |
+| `data/` | `_snaptrack`, `700` | Database, images, imported files, backups. The only place the running service writes. |
+| `logs/` | `_snaptrack`, `700` | The daemon's output (it may include receipt details). |
+| `home/` | `_snaptrack`, `700` | The account's home folder: pnpm's cache. |
+
+- The admin account is also a member of the `_snaptrack` group (the developer's choice). The group can read only `app/` and `runtime/`, which hold code. `data/`, `logs/`, and `home/` are owner-only, and `config/` is granted to the `_snaptrack` user by ACL, so group membership never reaches household data or secrets, neither for the admin account nor for a tool (such as a coding agent) running as it.
+- The service runs with `umask 077`, so files it creates are private to it.
+- Permissions are checked with `ls -le` after setup, not assumed: no other account (admin included, without `sudo`) can list `data/` or read `config/.env`, and `_snaptrack` cannot write to `app/`, `runtime/`, or `config/`.
 
 **Starting at boot**
 - SnapTrack runs as a **LaunchDaemon** (in `/Library/LaunchDaemons/`, with `UserName` set to the SnapTrack account and `KeepAlive` on), so it starts at boot with no one logged in and restarts if it crashes. A LaunchAgent starts only at login, so it is not used.
@@ -286,21 +303,30 @@ SnapTrack runs natively on the Mac, not in Docker. Its data stays in plain files
 - **FileVault is off.** With it on, the Mac stops at the unlock screen after a power cut and nothing starts until someone types a password. The trade-off is that someone who takes the Mac can read its disk (§13); backup drives are encrypted to limit this (§10).
 
 **Supply-chain protection** (a bad npm package is the most likely threat)
-- **Install scripts are blocked.** pnpm (version 10 or later) runs no dependency install scripts except those named in `pnpm.onlyBuiltDependencies` in `package.json` (e.g. `better-sqlite3`, which needs one for its native binary). Adding a package to that list needs the developer's approval, like adding any dependency.
-- **Installs use the lockfile** (`pnpm install --frozen-lockfile`) and run as the SnapTrack account, never as an admin.
-- **Outgoing internet is blocked for the SnapTrack account.** It may reach only `localhost` (the LLM relay) and Tailscale; everything else is refused, so even compromised code cannot send data out of the home network. During a deploy, the package registry and the code host are allowed for the install step only, then blocked again. The tool that enforces this (macOS's built-in `pf` firewall with per-user rules, or Little Snitch) is chosen in Stage 0 (§12). The LLM server account gets the same rule in its own project.
+- **Install scripts are blocked.** pnpm runs no dependency install scripts except those allowed in `allowBuilds` in `pnpm-workspace.yaml` (pnpm 11; it refuses the install if another package wants one). Today none is allowed: `better-sqlite3` ships prebuilt binaries. Allowing one needs the developer's approval, like adding any dependency.
+- **New releases wait a week.** pnpm's `minimumReleaseAge` is set to 7 days, so a package version published in the last week is never installed. Most malicious releases are found and pulled within days.
+- **Installs use the lockfile** (`pnpm install --frozen-lockfile`) and run as the SnapTrack account in `build/`, never as an admin.
+- **Outgoing internet is blocked for the SnapTrack account.** It may reach only `localhost` (the LLM relay) and Tailscale; everything else is refused, so even compromised code cannot send data out of the home network. During a deploy, outgoing access is opened for the install step only (the package registry), then closed again, even if the step fails. The code itself never comes from the internet: the deploy exports the commit from the admin account's checkout. The tool that enforces this (macOS's built-in `pf` firewall with per-user rules, or Little Snitch) is chosen in Stage 0 (§12). The LLM server account gets the same rule in its own project.
 
 **Runtime**
-- The Node version is pinned in the repo (`.node-version`, read by `mise`, plus `engines` in `package.json`), and the service runs that exact version.
+- The Node and pnpm versions are pinned in the repo (`.node-version`, read by `mise`; `engines` and `packageManager` in `package.json`). Deploy installs exactly those versions into `runtime/` with `mise`, and the LaunchDaemon starts that Node by its full path, so the service never runs whatever `node` happens to be on the system.
 - System libraries SnapTrack needs (e.g. for HEIC conversion, §12) are installed with Homebrew from the admin account and listed in `deploy/` setup notes.
 
 **Network**
 - SnapTrack listens only on `127.0.0.1`. `tailscale serve` provides HTTPS on the Tailscale address and forwards to it. Nothing listens on the local network or the internet.
 
 **Production and development**
-- **Production:** the `snaptrack` LaunchDaemon, with its own data folder and port.
-- **Development** on the Mac Studio, if used: a second LaunchDaemon (`snaptrack-dev`) with its own data folder, database, image folder, port, and Tailscale HTTPS port. It never shares files with production. Day-to-day development runs `pnpm dev` on the developer's own machine.
-- **Deploy** is one script (`deploy/deploy.sh`): fetch the code, install with the lockfile (registry allowed for this step only), build, run migrations (with the developer's go-ahead), and restart the daemon. Restarting a LaunchDaemon needs admin rights, so that step runs from the admin account.
+- **Production:** the `snaptrack` LaunchDaemon (`/Library/LaunchDaemons/snaptrack.plist`), with the folders above and its own port.
+- **Development** on the Mac Studio, if used: a second LaunchDaemon (`snaptrack-dev`) under `/opt/snap-track-dev/`, laid out the same way, with its own data folder, database, image folder, port, and Tailscale HTTPS port. It never shares files with production. Whether it also gets its own account is decided when it is built. Day-to-day development runs `pnpm dev` from the developer's checkout (on the Mac Studio, under the admin account), using a git-ignored `data/` folder in the repo, never `/opt/snap-track/`.
+- **Deploy** is one script (`deploy/deploy.sh`), run from the admin account, deploying one commit:
+  1. Refuse to run if the checkout has uncommitted changes. Export the commit (`git archive`) into `build/<commit>/`, owned by `_snaptrack`.
+  2. Install the pinned Node and pnpm into `runtime/` if they are not there yet.
+  3. Open outgoing access for `_snaptrack`; as `_snaptrack`, install with the lockfile and build; close access again (also when the step fails).
+  4. Copy the build into `app/releases/<commit>/`, owned by root.
+  5. Back up the database (SQLite online backup into `data/backups/`). Run migrations as `_snaptrack`, after the developer confirms at a prompt.
+  6. Point `app/current` at the new release and restart the daemon. Check that it answers; if not, point `current` back and restart.
+  7. Keep the last three releases; remove older ones.
+- **Rollback** points `current` at an earlier release and restarts. Migrations only move forward, so after a release that ran migrations, rolling back also means restoring the database backup taken in step 5. The script says so and asks before doing it.
 
 ---
 
@@ -799,9 +825,9 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 ## 9. Security and Privacy
 
 - **Network:** the SnapTrack server listens only on `127.0.0.1`, reached from household devices through `tailscale serve`; the LLM server listens only on the Mac itself (per its own project). Neither is exposed to the internet. SnapTrack's LLM server API key lives in `.env` only.
-- **Isolation:** SnapTrack runs under its own hidden, non-admin macOS service account with private folders, blocked install scripts, and outgoing internet blocked (§4.7).
+- **Isolation:** SnapTrack runs under its own hidden, non-admin macOS service account with private folders, blocked install scripts, and outgoing internet blocked (§4.7). Its code, Node runtime, and configuration are owned by root, so the running service can't change them.
 - **Auth:** username and password per household member, hashed with Argon2. Login sets an HTTP-only, Secure, SameSite cookie session. No public sign-up; an admin command (or first-run setup) creates users.
-- **Secrets:** `.env` is git-ignored and readable only by the SnapTrack account (`600`).
+- **Secrets:** `.env` is git-ignored. The production copy is `/opt/snap-track/config/.env`, owned by root (`600`) with an ACL letting only the SnapTrack account read it, so that account can't change it and other members of its group can't read it. It is not in the data folder, so backups never contain it; the developer keeps its values somewhere safe (e.g. a password manager) to recreate it on a restore.
 - **Data leaving the network:** none.
 - **Image retention:** households can limit how long receipt images are kept (§6.8).
 - **On the phone:** queued images stay in IndexedDB only until uploaded. Logging out clears the queue after warning about any receipts not yet uploaded.
@@ -811,10 +837,10 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 ## 10. Backups
 
 - Everything lives in two places: the SQLite file and the image directory.
-- A nightly job uses SQLite's online backup to make a safe copy in the SnapTrack backup folder, copies new images alongside it, and keeps the last 14 nights. It can also copy them to an external drive.
+- A nightly job uses SQLite's online backup to make a safe copy in the SnapTrack backup folder (`/opt/snap-track/data/backups/`), copies new images alongside it, and keeps the last 14 nights. It can also copy them to an external drive.
 - Time Machine covers the backup folder. It may copy the live database file mid-write, so restores always use the nightly copies, never Time Machine's copy of the live file.
 - Backup drives (Time Machine and external) are encrypted, since the Mac's own disk is not (FileVault is off; §4.7).
-- Restore = stop the SnapTrack service, put the files back, start the service. Documented and tested once in Stage 5.
+- Restore = stop the SnapTrack service, put the files back, start the service. Documented and tested once in Stage 5. `.env` is not in the backups (§9); on a fresh machine it is recreated from the developer's saved values.
 
 ---
 
@@ -823,8 +849,8 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 Each stage ends in something that runs and is verified. A stage is done when its **Done when** items are tested, not just written, **and `pnpm check` passes**.
 
 ### Stage 0 — Scaffold and quality gates
-**Build:** monorepo with `apps/server`, `apps/web`, `packages/contracts`, `packages/core`; strict TypeScript, ESLint, Prettier, Vitest; dependency-cruiser rules for §3.1; `pnpm check`; config loader with validation; structured logging; Fastify serving the built React app; SQLite + Drizzle with a first migration; `.env.example`; first ADR recording this architecture; hosting per §4.7: the SnapTrack account, private folders, LaunchDaemon, Node version pin, install-script allowlist, outgoing-internet block, `tailscale serve`, deploy script, and setup notes in `deploy/`.
-**Done when:** after a reboot with no one logged in, the SnapTrack LaunchDaemon serves a placeholder page over HTTPS at the Tailscale address from a phone, and it installs to the home screen; a deliberate boundary violation (e.g. a domain file importing Fastify) makes `pnpm check` fail; a dependency install script not on the allowlist does not run; an outgoing internet request from the SnapTrack account is refused while `localhost` still works; another standard account cannot read SnapTrack's data folder or `.env`.
+**Build:** monorepo with `apps/server`, `apps/web`, `packages/contracts`, `packages/core`; strict TypeScript, ESLint, Prettier, Vitest; dependency-cruiser rules for §3.1; `pnpm check`; config loader with validation; structured logging; Fastify serving the built React app; SQLite + Drizzle with a first migration; `.env.example`; first ADR recording this architecture; hosting per §4.7: the SnapTrack account, the folder layout and permissions, LaunchDaemon, Node and pnpm version pins, install-script allowlist, minimum release age, outgoing-internet block, `tailscale serve`, deploy and rollback script, and setup notes in `deploy/`. Plan: [stage-0-scaffold-plan.md](docs/feature-plans/stage-0-scaffold-plan.md).
+**Done when:** after a reboot with no one logged in, the SnapTrack LaunchDaemon serves a placeholder page over HTTPS at the Tailscale address from a phone, and it installs to the home screen; a deliberate boundary violation (e.g. a domain file importing Fastify) makes `pnpm check` fail; a dependency install script not on the allowlist does not run; an outgoing internet request from the SnapTrack account is refused while `localhost` still works, and is refused again after a deploy (including one that failed during the install step); another standard account, and the admin account without `sudo`, cannot read SnapTrack's data folder or `.env`; the SnapTrack account cannot write to its code, runtime, or config folders; a deploy followed by a rollback leaves the previous release serving.
 
 ### Stage 1 — Accounts
 **Build:** `auth` module (users, sessions, login/logout, route protection); admin command to create users.
@@ -876,7 +902,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 |---|---|
 | Whether two-pass extraction (OCR model + text model) or another vision model beats Qwen3.6-35B-A3B (§6.3). | Stage 9 |
 | The relay's low-priority API: how a request is marked low priority, and the exact busy / interrupted replies (§6.3.1). Built in the LLM-Server project. | Stage 3 |
-| How to block outgoing internet for the service accounts (`pf` per-user rules or Little Snitch), and how to allow the package registry only during deploys. | Stage 0 |
+| How to block outgoing internet for the service accounts (`pf` per-user rules or Little Snitch), and how to allow the package registry only during deploys (`pf` matches addresses, not domain names, and the registry sits behind a CDN). | Stage 0 |
 | Whether Tailscale connects at boot with no one logged in (the standalone app, or the `tailscaled` daemon). | Stage 0 |
 | How oRPC mounts on Fastify (its adapter or Node handler), and that a receipt image upload works through it end to end. | Stage 0 |
 | Whether oMLX gets the GPU when run as a LaunchDaemon with no one logged in, under its real service account rather than an admin account (tested in the LLM-Server project). | Before Stage 3 |
@@ -910,4 +936,4 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | A receipt is matched to the wrong company. | Automatic matches only from identifiers a person confirmed; model guesses and similar names are never applied; conflicts are flagged, not guessed; processor/point-of-sale branding is excluded; a corrected mistake marks the causing identifier ambiguous so it can't recur; store identification has its own score in the evaluation harness. |
 | Home server downtime (sleep, updates, power loss). | Mac set to never sleep and restart after power failure; FileVault off so restarts need no password; services start at boot as LaunchDaemons with no login needed; phones keep queueing offline; jobs resume after restart; nightly backups. |
 | The Mac is stolen; with FileVault off, its disk can be read. | Accepted trade-off for unattended restarts (§4.7). Backup drives are encrypted; the Mac is kept somewhere private. |
-| A compromised npm package reads household data or sends it out. | Install scripts blocked except an approved list; lockfile-only installs; its own hidden service account with private folders; outgoing internet blocked for that account (§4.7). |
+| A compromised npm package reads household data, sends it out, or tampers with the service. | Install scripts blocked except an approved list; new package versions held back a week; lockfile-only installs; its own hidden service account with private folders; code, runtime, and config owned by root so the service can't change them; outgoing internet blocked for that account (§4.7). |

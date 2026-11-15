@@ -1,0 +1,43 @@
+/* Theme tokens from docs/DESIGN.md: the only place colors and sizes are defined.
+   Dark is the base; light swaps values only. Components use these through CSS Modules. */
+:root {
+  color-scheme: dark;
+  --bg-page: #141615;
+  --surface: #1c201e;
+  --surface-raised: #242926;
+  --border: #2e3430;
+  --border-hover: #3d4540;
+  --text-heading: #f1f5f2;
+  --text-body: #c9d1cc;
+  --text-muted: #8a948e;
+  --accent: #276749;
+  --accent-hover: #2c7a52;
+  --accent-text: #68d391;
+  --on-accent: #f1f5f2;
+  --success: #68d391;
+  --warning: #f6ad55;
+  --danger: #f87171;
+  --radius-panel: 16px;
+  --radius-control: 12px;
+  --font: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg-page: #f3f5f3;
+    --surface: #ffffff;
+    --surface-raised: #eaeeeb;
+    --border: #dde3df;
+    --border-hover: #c5cec8;
+    --text-heading: #141615;
+    --text-body: #3a423d;
+    --text-muted: #535d57;
+    --accent-hover: #1f543b;
+    --accent-text: #276749;
+    --on-accent: #ffffff;
+    --success: #276749;
+    --warning: #965300;
+    --danger: #cc1414;
+  }
+}

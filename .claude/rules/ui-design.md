@@ -1,7 +1,8 @@
 # UI design follows docs/DESIGN.md
 
-Before adding or changing any UI or CSS, read `docs/DESIGN.md`
-and follow it.
+Before adding or changing any UI or CSS (anything in `apps/web/src/`, including
+the theme tokens in `apps/web/src/app/theme.css`), read `docs/DESIGN.md` and
+follow it.
 
 - If `docs/DESIGN.md` has no answer for what you need, ask the developer. Do not
   invent one.

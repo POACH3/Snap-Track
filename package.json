@@ -1,0 +1,35 @@
+{
+  "name": "snaptrack",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": "26.13.1",
+    "pnpm": "11.21.0"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @snaptrack/server --filter @snaptrack/web dev",
+    "build": "pnpm --filter @snaptrack/web build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm boundaries && pnpm test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p . && pnpm -r --no-bail typecheck",
+    "boundaries": "depcruise apps packages",
+    "test": "vitest run",
+    "db:generate": "pnpm --filter @snaptrack/server db:generate",
+    "db:migrate": "pnpm --filter @snaptrack/server db:migrate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
+    "dependency-cruiser": "18.7.2",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0"
+  }
+}

@@ -1,6 +1,6 @@
 # SnapTrack UI Design Guide
 
-*Read this before adding or changing any UI or CSS.* Values will come from one shared theme file in `apps/web` (the styling tool is not chosen yet; see "Theme tokens"). That file is the source of truth once it exists. Items marked **(proposed)** are decisions not yet confirmed by the developer.
+*Read this before adding or changing any UI or CSS.* Values come from one shared theme file, `apps/web/src/app/theme.css`, and components are styled with CSS Modules (see "Theme tokens"). That file is the source of truth for values. Items marked **(proposed)** are decisions not yet confirmed by the developer.
 
 Visual reference: the style preview at https://claude.ai/artifact/K5vEpRoi5Pj1N51a5NbZ3a (private to the developer) shows these values on sample phone and desktop screens.
 
@@ -105,7 +105,7 @@ Same token names as the dark table above; only the values change. Every text pai
 
 | Use | Value |
 |---|---|
-| Font | Inter (Google Fonts or self-hosted), fallback `ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif` |
+| Font | Inter, self-hosted (the variable font from `@fontsource-variable/inter`, bundled into the app; never loaded from Google Fonts, so phones contact only SnapTrack). CSS name `"Inter Variable"`, fallback `ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`. The Latin subsets are cached for offline use. |
 | Base size | 15px, line height 1.55 |
 | `h1` | 30px / 700, letter-spacing -0.02em, line height 1.2 (26px below 520px) |
 | `h2` | 20px / 600, letter-spacing -0.01em |
@@ -158,7 +158,8 @@ The kinds of surface, from lowest to highest. Use these names when talking about
 ### Theme tokens
 
 - Every color is used through a role-named CSS variable (`--bg-page`, `--surface`, `--text-body`, `--accent`, …), never a pasted hex value. This is what makes the light theme a swap of values.
-- The tokens live in one theme file in `apps/web`. Whether components use CSS Modules, Tailwind or something else is decided when the client is set up; the token names above stay the same either way.
+- The tokens live in one theme file, `apps/web/src/app/theme.css`, and nowhere else. Global element defaults (body, headings) are in `apps/web/src/app/base.css`.
+- **Components are styled with CSS Modules** (decided 2026-11-15): each component's styles are in a `<Component>.module.css` next to it, using the tokens through `var(--…)`. No new global classes; styles shared by several components belong to a shared component in `apps/web/src/shared/`, not a global class.
 - Switching: the dark values are the default. Light values apply when the device prefers light and the person's choice is System, or when they choose Light. The choice is a Dark / Light / System segmented control in Settings and is remembered on the device. **(proposed:** where the control sits in Settings.**)**
 
 ## Components

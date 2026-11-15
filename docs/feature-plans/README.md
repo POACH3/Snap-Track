@@ -7,6 +7,6 @@ Files here are plans for implementing features, one per feature. A plan that cha
 
 | Plan | Changes SPEC.md | Status |
 |---|---|---|
-| No plans yet | — | — |
+| [stage-0-scaffold-plan.md](stage-0-scaffold-plan.md) | §4.5, §4.7, §9, §10, §11 (Stage 0), §12, §13 | active (steps 1–8 done; hosting not started) |
 
 To add a plan: name it `<feature>-plan.md`, add the `Changes SPEC.md` and `Status` lines under its title, and add a row here.

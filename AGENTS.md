@@ -28,7 +28,7 @@ delete the section.
 - [x] `.gitignore`: ignore every `.env*` file except `.env.example`,
       `.claude/settings.local.json`, `.DS_Store`, and this stack's
       dependencies and build output.
-- [ ] `.env.example`: every environment variable the project reads, with
+- [x] `.env.example`: every environment variable the project reads, with
       placeholder values and a comment on each.
 - [x] Empty `.claude/output-styles/` and `.claude/skills/`: add a `.gitkeep`
       to each, or delete them (git does not keep empty folders).
@@ -45,7 +45,7 @@ delete the section.
       folders, deploy scripts and database commands.
 
 ### Update the rules for this stack
-- [ ] `.claude/rules/ui-design.md`: name the real UI folder.
+- [x] `.claude/rules/ui-design.md`: name the real UI folder.
 
 ### Update `.claude/settings.json` (the developer does this; agents never edit it)
 - [ ] `allow`: this stack's lint, test, build and typecheck commands.
@@ -76,23 +76,29 @@ Here's how this repo is structured. Always check here before assuming.
 
 SnapTrack is a household receipt and expense tracker: a TypeScript pnpm monorepo with a React + Vite PWA client and a Fastify server (SQLite + Drizzle) running natively on the Mac Studio as a macOS service (LaunchDaemon) under its own account, using ports and adapters, reached from phones over Tailscale HTTPS, with receipt extraction done by a vision model on the household's existing LLM server.
 
-Folders marked *(Stage 0)* do not exist yet; they are created when the scaffold is built (`SPEC.md` §4.2 and §11).
+Folders marked *(not yet)* are planned but do not exist yet (`docs/feature-plans/stage-0-scaffold-plan.md`).
 
 ```
 project_root/
 ├── AGENTS.md, CLAUDE.md, README.md, SPEC.md
-├── apps/                    # (Stage 0)
-│   ├── server/src/          # main.ts (composition root), config/, platform/ (db, logger, HTTP, job queue), modules/<feature>/
-│   └── web/src/             # React PWA: app/ (routing, layout), features/<feature>/, shared/ (UI components, API client, hooks)
-├── packages/                # (Stage 0)
-│   ├── contracts/           # Zod schemas: API and extraction output (single source of truth for data shapes)
-│   └── core/                # money, dates, ids, Result/error types
+├── apps/
+│   ├── server/              # drizzle/ (generated migrations), drizzle.config.ts
+│   │   └── src/             # main.ts (composition root), config/, platform/ (db, HTTP/oRPC), modules/<feature>/
+│   └── web/src/             # React PWA: app/ (routing, layout, theme.css), features/<feature>/, shared/ (UI components, API client, hooks)
+├── packages/
+│   ├── contracts/           # Zod schemas and the oRPC API contract (single source of truth for data shapes)
+│   └── core/                # money, ids, Result type, Transaction port type
+├── tooling/                 # repo-wide tests: boundaries.test.ts and boundary-fixtures/ (deliberate violations; never imported)
 ├── docs/                    # README.md (doc directory), DESIGN.md (UI style guide), TESTING.md, BUGS.md, REFACTOR.md
 │   ├── feature-plans/       # one plan per feature; README.md is the registry
-│   └── adr/                 # (Stage 0) architecture decision records
-├── deploy/                  # (Stage 0) LaunchDaemon definitions, deploy script, firewall rules, setup notes (`SPEC.md` §4.7)
+│   └── adr/                 # architecture decision records; README.md is the index
+├── deploy/                  # (not yet) LaunchDaemon definition, setup and deploy scripts, firewall rules, setup notes (`SPEC.md` §4.7)
 └── .claude/                 # Claude Code only: settings.json (shared permissions), rules/ (agent rules); settings.local.json is personal and git-ignored
 ```
+
+Root config: `pnpm-workspace.yaml` (workspaces, `allowBuilds` install-script allowlist, `minimumReleaseAge`), `.dependency-cruiser.mjs` (boundary rules), `eslint.config.js`, `.prettierrc.json`, `vitest.config.ts`, `tsconfig.base.json`, `.node-version`.
+
+The server has no build step: Node runs its TypeScript directly, so code must stay erasable-syntax only (no enums, namespaces or constructor parameter properties) and import local files with `.ts` extensions (ADR 0003).
 
 Every server module (`apps/server/src/modules/<feature>/`) has the same shape: `index.ts` (the only file other modules may import), `domain/` (pure rules, no I/O or framework imports), `application/` (use cases), `ports.ts`, `adapters/`, and `testing/` (fakes and port contract tests). See `SPEC.md` §3 and §4.2.
 
@@ -129,15 +135,13 @@ Other agents: follow everything in `.claude/rules/` and the `permissions.deny` a
 
 ## Development Commands (from repo root unless noted)
 
-Script names other than `pnpm check` are proposed and get confirmed when the
-Stage 0 scaffold adds them to `package.json`.
-
 - Install: `pnpm install`
-- Run locally: `pnpm dev` (server and web client in watch mode)
+- Run locally: `pnpm dev` (server and web client in watch mode). Needs a repo-root `.env` (`cp .env.example .env`, made by the developer) and `pnpm db:migrate` first; the server refuses to start with pending migrations.
 - Check everything: `pnpm check` (format check, lint, typecheck, boundary check, all tests; `SPEC.md` §3.6)
-- Tests only: `pnpm test`; end-to-end: `pnpm test:e2e` (Playwright)
-- Build: `pnpm build`
-- Deploy: `deploy/deploy.sh` (proposed; ask first, see below)
+- Format: `pnpm format` (writes files; `.claude/` is excluded in `.prettierignore`)
+- Tests only: `pnpm test`; end-to-end: `pnpm test:e2e` (Playwright; not set up until Stage 2)
+- Build: `pnpm build` (builds the web app; the server runs its TypeScript directly)
+- Deploy: `deploy/deploy.sh` (not written yet; ask first, see below)
 - Database: `pnpm db:generate` (create a migration from schema changes), `pnpm db:migrate` (apply migrations)
 
 ## Working Rules (Three Tiers)
