@@ -7,6 +7,6 @@ Files here are plans for implementing features, one per feature. A plan that cha
 
 | Plan | Changes SPEC.md | Status |
 |---|---|---|
-| `[feature]-plan.md` | [sections, by number and name, or "none"] | [active / shipped; short note] |
+| No plans yet | — | — |
 
 To add a plan: name it `<feature>-plan.md`, add the `Changes SPEC.md` and `Status` lines under its title, and add a row here.

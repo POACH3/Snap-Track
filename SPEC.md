@@ -46,11 +46,11 @@ Every feature works on both, but each screen is designed first for the device it
 ### Functional
 | ID | Requirement |
 |---|---|
-| F1 | A household member can photograph a receipt from their phone's browser, choose one or more receipt photos from the phone's library, or upload receipt image files from a desktop (file picker or drag and drop). |
+| F1 | A household member can photograph a receipt from their phone's browser, choose one or more receipt photos from the phone's library, or upload receipt image files from a desktop (file picker or drag and drop). A long receipt can be captured in several photos, kept together as one receipt. |
 | F2 | Capture works without a connection; queued receipts upload once the connection returns. |
 | F3 | The server extracts everything that identifies the store, the purchase and payment details, every line item, and a full word-for-word transcription of the receipt, as listed in §6.3.2. |
 | F4 | Extracted data counts right away, marked unreviewed, and can be reviewed and corrected at any time. Receipts the model could not read are marked review required and are filled in by hand. |
-| F5 | The original image is stored with its receipt and shown side by side with the extracted data, both during review and when viewing a receipt later. |
+| F5 | The original images (one or more per receipt) are stored with their receipt and shown side by side with the extracted data, both during review and when viewing a receipt later. |
 | F6 | Each line item has its own category, so one receipt can span several categories. |
 | F7 | The store is identified as a **company** (e.g. Walmart), not a location, with extreme accuracy: an automatic match is made only on a known identifier, and never on a guess. Items are normalized so the same item is counted as one across receipts. |
 | F8 | Once a user confirms which company a receipt is from, every identifier on that receipt is remembered, so the user never has to confirm that company again. |
@@ -90,6 +90,11 @@ These rules apply to every line of code. When one conflicts with speed, the rule
 4. **Each module owns its tables.** No module reads or writes another module's tables. The two exceptions are the `analytics` and `export` modules, which have read-only access to everything for reporting and export (see §4.3).
 5. **One composition root.** All wiring (which adapter fills which port) happens in one file per app (`main.ts`). Plain constructor arguments; no dependency-injection framework.
 6. **Swappable infrastructure.** Replacing the LLM server, the database, or image storage means writing one new adapter and changing one line in the composition root. Nothing else changes.
+7. **Database work is synchronous; transactions go through one port.** `better-sqlite3` (and Drizzle on it) runs queries synchronously, and its transactions only cover synchronous code: anything after an `await` inside a transaction runs after it has already been saved, so a later failure can't undo it, and no error says so. Therefore:
+   - Repository ports return values directly, not Promises.
+   - A change that must succeed or fail as a whole (e.g. a merge across modules, §4.3) runs inside `Transaction.run(fn)`, a port supplied by the platform database adapter. Its type rejects a `fn` that returns a Promise, so an `async` function can't be passed by mistake.
+   - Other I/O (files, the model, HTTP) is never done inside a transaction: it happens before or after.
+   - Trade-off: moving to a database with an asynchronous driver (e.g. PostgreSQL) would mean making repository ports and `Transaction` asynchronous, not just writing one new adapter. Accepted, since SQLite fits a household's load (§4.4).
 
 ### 3.2 No repeated code
 1. **One source of truth for data shapes.** Zod schemas in `packages/contracts` define every API request and response, the extraction output, and form validation. TypeScript types are inferred from them, never hand-written twice. Server and client both import them.
@@ -216,7 +221,7 @@ modules/receipts/
 
 Modules communicate only through each other's `index.ts`. When the `receipts` module confirms a receipt, it calls `catalog.learnFromConfirmedReceipt(...)` through that public interface; it never writes identifier tables itself. Circular dependencies between modules are not allowed (enforced by the boundary check).
 
-**Merges.** When two stores, two items, or two hierarchy entries are merged, `catalog` merges its own tables (identifiers, item categories and tags, store defaults, child entries). Other modules' rows that point at the merged-away entry are updated by the module that owns them, never by `catalog`. Because `receipts` depends on `catalog`, `catalog` can't call `receipts` directly; instead `catalog` defines a port, `CatalogMergeListener` (`storesMerged(from, to)`, `itemsMerged(from, to)`, `categoriesMerged(from, to)`), and `receipts` supplies the adapter that updates its own rows (`receipts.store_id`, `line_items.item_id`, `line_items.line_category_id`, `line_items.suggested_category_id`). The composition root wires them together. The catalog changes and every listener's changes run in one database transaction, so a merge either completes everywhere or not at all.
+**Merges.** When two stores, two items, or two hierarchy entries are merged, `catalog` merges its own tables (identifiers, item categories and tags, store defaults, child entries). Other modules' rows that point at the merged-away entry are updated by the module that owns them, never by `catalog`. Because `receipts` depends on `catalog`, `catalog` can't call `receipts` directly; instead `catalog` defines a port, `CatalogMergeListener` (`storesMerged(from, to)`, `itemsMerged(from, to)`, `categoriesMerged(from, to)`), and `receipts` supplies the adapter that updates its own rows (`receipts.store_id`, `line_items.item_id`, `line_items.line_category_id`, `line_items.suggested_category_id`). The composition root wires them together. The catalog changes and every listener's changes run in one database transaction (`Transaction.run`, §3.1 rule 7), so a merge either completes everywhere or not at all. Listener methods are therefore synchronous, like the repositories they call.
 
 ### 4.4 Tech stack
 | Layer | Choice | Why |
@@ -258,7 +263,7 @@ What this means for the design:
 - **Model size budget:** the LLM server loads one model at a time, so the vision model gets the GPU memory the chat model was using. Vision models up to roughly 35B parameters (such as the chosen Qwen3.6-35B-A3B) fit comfortably at 4-bit (about 20–25 GB; the current chat models use 19–26 GB). Larger models (~70B) technically fit but are likely too slow to be worth it; the Stage 3 evaluation decides.
 - **Speed:** expect seconds per receipt for small models and tens of seconds for ~32B models. Extraction is asynchronous, so this never blocks capture.
 - **Always on:** the Mac must not sleep (Energy settings: prevent automatic sleep; start after power failure). SnapTrack, the LLM server, and Tailscale start at boot with no one logged in (§4.7); FileVault is off so a restart needs no password. While the LLM server is stopped, extraction jobs simply wait.
-- **Storage:** at ~0.5 MB per resized receipt image, 1 TB is effectively unlimited even if images are kept forever. Image retention (§6.8) is a privacy and tidiness choice, not a disk-space need.
+- **Storage:** at ~1 MB per resized receipt photo (§6.1), 1 TB is effectively unlimited even if images are kept forever. Image retention (§6.8) is a privacy and tidiness choice, not a disk-space need.
 - **Backups:** the nightly backup (§10) can target an external drive, and can also be covered by Time Machine.
 
 ### 4.7 Hosting and isolation
@@ -374,13 +379,13 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
   - `barcode` — a complete, valid UPC/EAN (correct length and check digit). The same product at any company, so `store_id` is null and it matches everywhere.
   - `code` — any other printed item code (store SKU, or a UPC printed with digits dropped, as many receipts do). Scoped to the company, since the same digits can mean different products elsewhere.
   - `name` — the printed line text. Scoped to the company.
-- Unique on (`store_id`, `type`, `value`).
+- Unique on (`store_id`, `type`, `value`) for company-scoped identifiers, plus a second, partial unique index on (`type`, `value`) where `store_id` is null, for barcodes. SQLite treats every null as different from every other, so the first index alone would let the same barcode be saved for two items. Both indexes are in the migration, and a repository test checks that saving one barcode for a second item is refused.
 - Store and item identifiers share one matching and learning implementation in the catalog domain; only the identifier types differ.
 
 **`receipts`** (receipts)
 - `id` (client-generated)
 - `logged_by_user_id` — required for every receipt, photo or manual. Set by the server from the logged-in session, never taken from the request body, so an entry can't be tagged as someone else.
-- `source`: `photo`, `manual`, or `import`. Manual and imported entries have no image; all image fields stay null.
+- `source`: `photo`, `manual`, or `import`. Manual and imported entries have no images (no `receipt_images` rows).
 - `import_batch_id`, `external_order_id` (imported entries only; the retailer's order number). Unique on (`store_id`, `external_order_id`), which is what stops re-imports creating duplicates.
 - `status`:
   - `uploaded` → `extracting` → `unreviewed` → `confirmed`
@@ -405,10 +410,15 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 - `note` (optional free text, e.g. from manual entry)
 - All JSON fields have one schema each in `packages/contracts`.
 - `confirmed_by_user_id`
+- `confirmed_at`
+- Images are in `receipt_images` (below), since a long receipt may take several photos.
+
+**`receipt_images`** (receipts) — the photos of a receipt, in order. Most receipts have one; a long receipt may have several.
+- `id`, `receipt_id`, `position` (order, top of the receipt first)
 - `image_key` (opaque key for the `FileStore` port; null once the image is deleted under the retention rules, §6.8)
 - `image_sha256` (catches the same photo uploaded twice; kept after the image is deleted)
 - `image_deleted_at` (null while the image exists)
-- `confirmed_at`
+- Unique on (`receipt_id`, `position`). A receipt's photos are always deleted together (§6.8).
 
 **`settings`** (settings) — household-wide settings, one row per setting.
 - `key` (primary key), `value` (JSON), `updated_by_user_id`
@@ -449,7 +459,8 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 ### Rules
 - `unreviewed` and `confirmed` receipts both count toward breakdowns and trends. `uploaded`, `extracting`, and `review_required` receipts have no data yet and do not.
 - Which statuses count is decided by one shared domain function, used by every analytics query, so the rule lives in one place.
-- **Keep everything, require little.** Everything extracted is stored, even fields no screen shows yet; which fields are displayed is decided later, per screen. Only the **store** is required before a receipt can be confirmed (or a manual entry saved). Every other field may be null when the receipt doesn't print it or the model can't read it. Imported entries get their store from the retailer's format definition.
+- **Keep everything, require little.** Everything extracted is stored, even fields no screen shows yet; which fields are displayed is decided later, per screen. Only the **store** and the **total** are required before a receipt can be confirmed (or a manual entry saved), so every expense that counts has an amount. Every other field may be null when the receipt doesn't print it or the model can't read it. Imported entries get their store from the retailer's format definition and their total from the file.
+- **A receipt's amount** is its total. An unreviewed receipt whose total the model couldn't read counts as its line totals − receipt discount + tax + tip (missing figures count as zero). Extraction that yields neither a total nor any line amount has no usable data, so the receipt is marked `review_required` (§6.3).
 - Deleting a store or item is a **merge**: its identifiers and line items move to another one, never orphaned. Each module moves its own rows (§4.3, Merges).
 - Archiving a hierarchy entry hides it (and everything below it) from pickers but keeps it on existing line items.
 - Deleting a hierarchy entry is a merge into another entry on the same level; its purchases and children move along, each module moving its own rows (§4.3, Merges).
@@ -466,9 +477,10 @@ Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainme
    - **Phone, camera:** **Snap** opens the camera (`<input type="file" accept="image/*" capture="environment">`).
    - **Phone, library:** **Choose photos** opens the photo library with multi-select. Each chosen photo becomes its own receipt.
    - **Desktop:** **Upload images** opens a file picker (multi-select), or image files can be dragged onto the page. Each file becomes its own receipt.
-   - All three feed the same capture pipeline (steps 2–4); only the way the image is chosen differs.
-2. The client resizes the image (longest side ~2000 px) and re-encodes it as JPEG, which cuts upload size and model processing time. Accepted inputs: JPEG, PNG, and HEIC (the iPhone's default photo format). If the browser can't decode an image itself (e.g. HEIC in Chrome on a desktop), the original file is uploaded and the server converts it.
-3. The client generates the receipt ID and saves `{id, image blob, captured_at, user}` to the upload queue **before** trying to upload.
+   - **Long receipts:** after a photo is taken or chosen, the capture screen offers **Add another photo** (camera or library). Each photo added this way joins the same receipt, in order. The receipt is uploaded when the user taps **Done** or leaves the capture screen, so extraction always sees every photo.
+   - All of these feed the same capture pipeline (steps 2–4); only the way the image is chosen differs.
+2. The client shrinks each photo to at most about 4 million pixels, keeping its shape (never enlarging), and re-encodes it as JPEG, which cuts upload size and model processing time. The limit is on total pixels, not the longest side, so a long, narrow receipt keeps enough width to read (a 1:5 receipt comes out about 900 × 4500 px). Accepted inputs: JPEG, PNG, and HEIC (the iPhone's default photo format). If the browser can't decode an image itself (e.g. HEIC in Chrome on a desktop), the original file is uploaded and the server converts and shrinks it the same way.
+3. The client generates the receipt ID and saves `{id, image blobs (in order), captured_at, user}` to the upload queue **before** trying to upload.
 4. The capture screen confirms "saved" right away, whether online or not.
 
 ### 6.2 Upload and sync (client → server)
@@ -476,12 +488,12 @@ Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainme
 - On first launch the app calls `navigator.storage.persist()`, so the browser is less likely to delete queued receipts when storage runs low (iOS in particular can clear a site's storage if it is not marked persistent). The pending count still shows anything waiting.
 - On Android/Chrome, Background Sync also flushes the queue with the app closed. iOS does not support it, so queued receipts upload the next time the app is opened. The UI shows a pending count so this is visible.
 - Upload is `PUT /receipts/:id` (idempotent). Retrying a receipt the server already has returns its current state. The same endpoint and queue carry manual entries (data, no image), so they also work offline.
-- A queue entry is deleted only after the server confirms it has the image.
+- A queue entry is deleted only after the server confirms it has every image of the receipt.
 
 ### 6.3 Extraction (server)
 1. Upload creates a `receipts` row (`uploaded`) and enqueues an extraction job.
-2. The job runner passes each receipt's image to the `ReceiptExtractor` port, which sends it to the LLM server's relay as a low-priority request; the relay decides when to run it (§6.3.1). The production adapter sends the image (as a base64 data URI) and a prompt to the LLM server's OpenAI-compatible chat endpoint and requests JSON matching the extraction schema from `packages/contracts` (using structured-output / JSON-schema mode if the server supports it).
-3. The output is validated against the same schema. Invalid output is retried once. If it is still invalid, or the job runs out of retries, the receipt is marked `review_required` and a person enters its data by hand (§6.5).
+2. The job runner passes each receipt's images, in order, to the `ReceiptExtractor` port, which sends them to the LLM server's relay as one low-priority request; the relay decides when to run it (§6.3.1). The production adapter sends the images (as base64 data URIs, in one message, telling the model they are consecutive parts of one receipt) and a prompt to the LLM server's OpenAI-compatible chat endpoint and requests JSON matching the extraction schema from `packages/contracts` (using structured-output / JSON-schema mode if the server supports it).
+3. The output is validated against the same schema. Invalid output is retried once. If it is still invalid, or the job runs out of retries, or the valid output has neither a total nor any line amount (§5, Rules), the receipt is marked `review_required` and a person enters its data by hand (§6.5).
 4. **Consistency checks** (pure domain functions; warnings, not failures), shown to the reviewer:
    - Line totals ≈ subtotal (line totals are already net of item discounts).
    - Subtotal − receipt discount + tax + tip ≈ total.
@@ -580,7 +592,7 @@ Runs right after extraction. Because unreviewed receipts count toward analytics,
 5. Learning (§6.7) happens only when a person confirms or edits, never from unreviewed data.
 
 ### 6.5 Review (client)
-- The receipt image and the editable extracted fields are shown side by side (stacked on a phone, with the image collapsible). The image supports pinch-zoom and pan, so small print can be checked against each field.
+- The receipt image and the editable extracted fields are shown side by side (stacked on a phone, with the image collapsible). A receipt with several photos shows them in order, one after another, in the same panel. The image supports pinch-zoom and pan, so small print can be checked against each field.
 - The same side-by-side layout (one shared component) is used when opening a confirmed receipt later, read-only until **Edit** is tapped.
 - Every field is editable. Lines can be added, removed, or split.
 - Consistency warnings are highlighted next to the fields involved.
@@ -598,7 +610,7 @@ Runs right after extraction. Because unreviewed receipts count toward analytics,
   - **Store default:** when a store has no default yet, the screen offers "What do you usually buy here?" The answer becomes the store's default and applies at once to every line without an item or line category. The default can also be changed later from the store's detail screen.
   - **Suggestions:** an Unclassified line shows the software's suggested category (and suggested tags) with **Accept** / **Dismiss**. Nothing is applied until accepted. Lines that already have a category from the user, the item, or the store show no suggestion.
 - Duplicates: flagged as **definite** when the store matches and either a transaction number matches, or the approval code and card last four match; flagged as **possible** when the store, date, time (if printed), and total match.
-- **Confirm** saves everything, sets `confirmed`, and triggers learning (below). Confirm is blocked until the store is set; every other field may be left empty.
+- **Confirm** saves everything, sets `confirmed`, and triggers learning (below). Confirm is blocked until the store and the total are set; every other field may be left empty.
 - **Unreviewed receipts** are labeled "Unreviewed" everywhere they appear (lists, receipt view, drill-downs). The receipts list can be filtered to show only unreviewed or review-required receipts.
 - **Review-required receipts:** the same side-by-side screen opens with the image and empty fields. The user types in what the receipt shows, using the same pickers, validation, and consistency checks, then confirms. Planned later: a guided entry mode that walks the user through the fields one at a time (Future, §11).
 
@@ -637,7 +649,7 @@ Over time, stores and repeat purchases are matched by identifier, with no model 
   - `review_required` receipts (and any stuck in `uploaded` / `extracting`) are deleted entirely, since without the image there is no data and nothing left to enter.
   - Set to keep indefinitely, nothing is ever deleted: unreviewed receipts keep their images and review-required receipts wait until someone enters them.
   - Warning: from 30 days before the deadline (or a third of the period, if shorter), the receipt list marks the receipt "Image will be deleted in N days — review now" (or "Receipt will be deleted in N days — enter it now" for review-required ones).
-- **Cleanup:** a nightly job (on the `JobQueue`) applies all of the above: deletes due images through the `FileStore` port (clearing `image_key`, setting `image_deleted_at`) and deletes due review-required receipts. Deciding what is due ("keep / delete image / delete receipt") is one pure domain function covering every case, tested on its own.
+- **Cleanup:** a nightly job (on the `JobQueue`) applies all of the above: deletes due images through the `FileStore` port (clearing `image_key` and setting `image_deleted_at` on every `receipt_images` row of the receipt; a receipt's photos are always deleted together) and deletes due review-required receipts. Deciding what is due ("keep / delete image / delete receipt") is one pure domain function covering every case, tested on its own.
 - **What is kept when only the image is deleted:** all extracted data, line items, and `image_sha256` (so duplicate detection still works). Analytics are unaffected.
 - **Shortening a period:** before saving, the Settings screen shows how many images (and, for the unreviewed setting, how many review-required receipts) the new value will delete, and asks for confirmation. Deletion happens at the next nightly run, not instantly, so a mistaken change can be reverted the same day.
 - **After deletion:** the receipt view shows "Image removed on <date>" with the reason (confirmed-receipt retention, or not reviewed in time) in place of the image; the data side is unchanged and still editable.
@@ -743,7 +755,9 @@ All analytics are read-only SQL queries over receipts that count (`unreviewed` a
 | **Price history** | Unit price over time for an item, one line per store, showing both the price paid and the regular price (before item discounts); latest price at each store. |
 | **Spikes** | A store or category whose monthly total is well above its recent average (initial rule: more than 1.5× the trailing 3-month average and at least $25 more; tune later). |
 
-**Tax, tip, and receipt-wide discounts** are not tied to one line. For category and item breakdowns they are spread across lines in proportion to line totals (one shared allocation function in `packages/core`), so category totals add up to what was actually paid. Tax codes are recorded but not yet used for allocation (§12). Fee lines keep their own category. Store totals use the receipt total directly.
+**Tax, tip, and receipt-wide discounts** are not tied to one line. For category and item breakdowns they are spread across lines in proportion to line totals (one shared allocation function in `packages/core`, rounding so the cents add up exactly). Tax codes are recorded but not yet used for allocation (§12). Fee lines keep their own category. Store totals use the receipt's amount (§5, Rules) directly.
+
+**Unitemized amounts.** When a receipt's lines don't account for its whole amount (the model missed a line, or a quick total was entered without lines), the gap is: amount − (line totals − receipt discount + tax + tip). That gap is not spread onto other lines, since it would inflate items that were read correctly. Instead it counts as **Unitemized** in category breakdowns, shown beside Unclassified at L1, and is left out of item breakdowns and price tracking. A receipt with no lines (or whose line totals add up to zero) is entirely unitemized. A negative gap (lines add up to more than the total) is shown the same way, as a negative amount. With this, every category breakdown adds up to the sum of receipt amounts, the same figure the store view shows. The gap is worked out by the same shared allocation function.
 
 ---
 
@@ -759,7 +773,7 @@ From Settings → **Export all data**. Produces one ZIP file:
 | `csv/<table>.csv` | One CSV per data table: receipts, line items, stores, store identifiers, items, item identifiers, categories (all four levels, with each entry's parent), tags, item tags, line item tags, settings, import batches, and users (display name and username only). |
 | `csv/expenses.csv` | A spreadsheet-friendly flat view: one row per line item with date, store, item name, category, tags, person, source, review status, quantity, and amounts already joined in. |
 | `data.json` | Everything in one structured file, receipts with their line items nested, plus a `schemaVersion`. Lossless, and the basis for any future import. |
-| `images/<receipt id>.jpg` | Receipt images still on file. Optional (a checkbox), since this is the large part. |
+| `images/<receipt id>-<position>.jpg` | Receipt images still on file, one file per photo. Optional (a checkbox), since this is the large part. |
 | `README.txt` | What each file and column means. |
 
 **Not exported:** password hashes, sessions, and internal working records (extraction jobs). These are operational state, not household data.
@@ -817,17 +831,17 @@ Each stage ends in something that runs and is verified. A stage is done when its
 **Done when:** each household member can log in from their own phone; requests without a session are rejected.
 
 ### Stage 2 — Capture and upload (online)
-**Build:** `receipts` module skeleton; `FileStore` port (stores receipt images and imported files) with file-system adapter and fake; capture by camera, phone library (multi-select), and desktop file picker / drag and drop; client-side resize; server-side conversion for images the browser can't decode (HEIC); idempotent `PUT /receipts/:id`; receipts list showing status and thumbnail; responsive layout shell (phone and desktop navigation).
-**Done when:** a photo taken on both an Android phone and an iPhone shows up in the list with the right person attached; three photos chosen together from an iPhone library become three receipts; a HEIC file dragged in on a desktop uploads and displays; uploading the same receipt twice creates one record.
+**Build:** `receipts` module skeleton; `FileStore` port (stores receipt images and imported files) with file-system adapter and fake; capture by camera, phone library (multi-select), and desktop file picker / drag and drop; **Add another photo** for long receipts; `receipt_images`; client-side resize (pixel limit, §6.1); server-side conversion for images the browser can't decode (HEIC); idempotent `PUT /receipts/:id`; receipts list showing status and thumbnail; responsive layout shell (phone and desktop navigation).
+**Done when:** a photo taken on both an Android phone and an iPhone shows up in the list with the right person attached; three photos chosen together from an iPhone library become three receipts; a long receipt taken as three photos with **Add another photo** becomes one receipt with three images in order; a HEIC file dragged in on a desktop uploads and displays; uploading the same receipt twice creates one record.
 
 ### Stage 3 — Extraction
 **Build:** extraction schema in `contracts`; `extraction` module; `JobQueue` port with persisted SQLite adapter; `ReceiptExtractor` port with LLM-server adapter and fake, including busy / interrupted replies; the extraction loop (§6.3.1); consistency checks; low-priority request support in the relay (built in the LLM-Server project, §6.3.1); vision model added to the LLM server.
 **Model:** Qwen3.6-35B-A3B (4-bit) (§6.3); record the choice in an ADR.
-**Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; an unreadable image ends up `review_required`; a SnapTrack restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. While the relay replies busy, jobs wait without using up attempts and complete once it is free. A receipt interrupted by a chat goes back to the queue and is completed later, and interruptions never count toward the 5-attempt limit. (That the relay switches back to the previous model, and puts chat ahead of receipts, is tested in the LLM-Server project.)
+**Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; a long receipt in two or more photos is extracted as one receipt with every line; an unreadable image ends up `review_required`; a SnapTrack restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. While the relay replies busy, jobs wait without using up attempts and complete once it is free. A receipt interrupted by a chat goes back to the queue and is completed later, and interruptions never count toward the 5-attempt limit. (That the relay switches back to the previous model, and puts chat ahead of receipts, is tested in the LLM-Server project.)
 
 ### Stage 4 — Review and log
 **Build:** `catalog` module (stores, items, categories with defaults, store and item identifiers, store identification, matching, learning, store detail screen with its Identifiers list); hierarchy editor (L1–L4: add, rename, move, archive, merge); hierarchy picker showing the full path (e.g. "Groceries › Frozen foods › Ice cream"); free tags; item naming and tagging from the review screen and an Items screen; side-by-side image/data component with zoom; review screen; receipt detail view (same component); manual entry with quick and full modes (same form component, §6.6); store/item pickers; confirm flow; duplicate warning.
-**Done when:** after a company is confirmed once, a second receipt from it (same or different location, sharing at least one identifier) is matched to it automatically, with its repeat items; a receipt whose identifiers point to two companies is flagged, not guessed; a receipt that matches a known company only by address is flagged, not matched; correcting a wrong automatic match stops the identifier that caused it from matching again; a receipt can't be confirmed without a store but can with any other field empty; after a user names an item, a later receipt from the same company with the same code but differently printed text shows the user's name; a tag added to an item appears on all its purchases, and a tag added to one purchase appears only there; with a store default of Groceries, every line from that store is Groceries and the model's differing guess is not shown; recategorizing one item "for this item" applies on its next purchase from any store, while "this purchase only" changes nothing else; an Unclassified line's suggestion has no effect until accepted; a confirmed receipt reopens with its image beside its data; a review-required receipt can be entered by hand and confirmed; a quick manual entry and a full manual entry are each saved as confirmed and appear in the receipts list labeled manual; after merging two items, every line from both shows the kept item (and the same for merging two stores or two hierarchy entries); a merge that fails partway changes nothing.
+**Done when:** after a company is confirmed once, a second receipt from it (same or different location, sharing at least one identifier) is matched to it automatically, with its repeat items; a receipt whose identifiers point to two companies is flagged, not guessed; a receipt that matches a known company only by address is flagged, not matched; correcting a wrong automatic match stops the identifier that caused it from matching again; a receipt can't be confirmed without a store or a total but can with every other field empty; after a user names an item, a later receipt from the same company with the same code but differently printed text shows the user's name; a tag added to an item appears on all its purchases, and a tag added to one purchase appears only there; with a store default of Groceries, every line from that store is Groceries and the model's differing guess is not shown; recategorizing one item "for this item" applies on its next purchase from any store, while "this purchase only" changes nothing else; an Unclassified line's suggestion has no effect until accepted; a confirmed receipt reopens with its image beside its data; a review-required receipt can be entered by hand and confirmed; a quick manual entry and a full manual entry are each saved as confirmed and appear in the receipts list labeled manual; after merging two items, every line from both shows the kept item (and the same for merging two stores or two hierarchy entries); a merge that fails partway changes nothing.
 
 ### Stage 5 — Offline capture and sync  ← **first usable version (MVP)**
 **Build:** service worker app-shell caching; `UploadQueue` with IndexedDB adapter; sync on open/reconnect; Background Sync where supported; pending-count indicator; nightly backup job and a tested restore; `settings` module and Settings screen; both image retention settings and the nightly cleanup job; `export` module with full export (CSV, JSON, optional images).
@@ -835,7 +849,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 
 ### Stage 6 — Breakdowns
 **Build:** `analytics` module; pick a chart library (ADR); by-store, by-item, and by-category monthly views; person filter; date range picker; tax/discount allocation.
-**Done when:** category totals for a month add up to the sum of that month's receipt totals.
+**Done when:** category totals for a month add up to the sum of that month's receipt amounts (§5, Rules) and match the store view's total, including a receipt whose lines don't add up to its total (the gap shows as Unitemized) and an unreviewed receipt with no printed total.
 
 ### Stage 7 — Trends
 **Build:** monthly totals over time; month-over-month and year-over-year comparisons; drill-down from a trend to the underlying receipts.
@@ -872,6 +886,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | Whether and how recorded tax codes are interpreted (e.g. to spread tax only across the lines it applies to). | Stage 6 |
 | Spike threshold: is 1.5× / $25 useful or noisy? | Stage 8 |
 | Which extracted fields each screen displays (all are stored regardless). | Stage 4 onward, per screen |
+| The vision model's own image-size limit in oMLX / `mlx-vlm` (it may shrink images again before reading them), and whether it must be raised so long receipts stay readable (§6.1). | Stage 3 |
 | Server-side image conversion library for HEIC (must run natively on macOS ARM64; macOS's built-in `sips` is one option, behind an adapter). | Stage 2 |
 | What "other records from online retailers" covers beyond CSV (e.g. PDF invoices, order confirmation emails), and whether any are in scope. Currently digital/PDF receipts are a non-goal. | Stage 10 |
 | Other retailers' report formats, as they're supplied. | Stage 10 |

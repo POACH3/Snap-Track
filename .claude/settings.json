@@ -1,11 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm test:*)",
-      "Bash(npm run test:*)",
-      "Bash(npm run lint:*)",
-      "Bash(npm run build:*)",
-      "Bash(npm run typecheck:*)",
+      "Bash(pnpm check:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm typecheck:*)",
       "Bash(git status:*)",
       "Bash(git -C * status:*)",
       "Bash(git diff:*)",
@@ -76,8 +76,6 @@
       "Bash(git -C * rebase:*)",
       "Bash(git restore:*)",
       "Bash(git -C * restore:*)",
-      "Edit(/docs/DESIGN_DOCUMENT.md)",
-      "Write(/docs/DESIGN_DOCUMENT.md)",
       "Read(/.env)",
       "Edit(/.env)",
       "Write(/.env)",

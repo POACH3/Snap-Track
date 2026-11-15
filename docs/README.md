@@ -1,4 +1,4 @@
-# [PROJECT] Documentation
+# SnapTrack Documentation
 
 <!-- This file is a directory of the docs in this folder. Keep one line per doc,
      grouped under a topic heading. Add a line when a doc is added; remove it
@@ -24,8 +24,3 @@ Project documentation. For setup, commands, and deployment, start with the
 
 - [BUGS.md](BUGS.md): open and fixed bugs.
 - [REFACTOR.md](REFACTOR.md): cleanup work to do later.
-
-## [Topic]
-
-<!-- Add a section per topic as docs are added (e.g. API, Realtime, Operations). -->
-- [FILE.md](FILE.md): [what it covers, and when to read it].

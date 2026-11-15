@@ -1,6 +1,6 @@
 # Testing
 
-Index of [PROJECT] tests.
+Index of SnapTrack tests.
 
 ## Suites
 
@@ -10,10 +10,12 @@ Index of [PROJECT] tests.
 
 
 
-## Realtime tests
+## End-to-end tests (Playwright)
 
 
 ## Test files
 
 
 ## Not covered
+
+- No code yet; suites arrive with Stage 0.
