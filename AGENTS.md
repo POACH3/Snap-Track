@@ -153,8 +153,9 @@ Stage 0 scaffold adds them to `package.json`.
     also `pnpm test:e2e`.
   - Changes to pure logic (`packages/core/`, `packages/contracts/`, and each
     server module's `domain/` and `application/`): add or update a test for it.
-  - A new or changed port: its contract test runs against both the real
-    adapter and the fake (`SPEC.md` §3.5).
+  - A new or changed port: if it has a fake, its contract test runs against
+    both the real adapter and the fake. Repositories have no fake; their
+    tests use the real SQLite adapter on an in-memory database (`SPEC.md` §3.5).
 
 ### Ask first (needs the developer's confirmation)
 

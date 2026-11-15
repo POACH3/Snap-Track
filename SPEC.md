@@ -114,12 +114,14 @@ These rules apply to every line of code. When one conflicts with speed, the rule
 | Layer | Test type | Uses |
 |---|---|---|
 | Domain | Unit tests | Plain inputs and outputs, no mocks. Highest coverage. |
-| Application | Use-case tests | In-memory fake adapters for every port. |
+| Application | Use-case tests | The real SQLite adapters on an in-memory database (`:memory:`, migrations applied, fresh per test) for repositories; in-memory fakes for every other port (model, file store, clock). |
 | Adapters | Integration tests | Real SQLite (temp file), real file system, recorded model responses. |
-| Ports | Contract tests | One shared test suite per port, run against both the real adapter and the fake, so fakes cannot drift from reality. |
+| Ports | Contract tests | One shared test suite per port that has a fake, run against both the real adapter and the fake, so fakes cannot drift from reality. Repositories have no fake, so they need none. |
 | Whole app | End-to-end (Playwright) | Critical paths only: capture → review → confirm, offline sync. |
 
 Every fake adapter lives next to its port and is reused by all tests (no per-test hand-rolled mocks).
+
+**Why real SQLite instead of repository fakes:** an in-memory SQLite database is as fast as a fake, catches real SQL and migration mistakes, and removes a fake plus a contract suite for every repository. The cost: tests depend on SQLite, so swapping the database (§3.1 rule 6) means running the same tests against the new adapter rather than relying on fakes. Repositories stay behind ports, so business logic still never touches the database directly.
 
 ### 3.6 Enforcement
 - **Boundaries are checked by tooling**, not memory: `dependency-cruiser` fails the build if a domain file imports a framework, a module imports another module's internals, or a dependency points outward.
@@ -197,7 +199,7 @@ modules/receipts/
 **Client rules:**
 - Each feature folder holds its own screens, components, and hooks.
 - Components render; hooks fetch and mutate (TanStack Query). No fetch calls inside components.
-- The API client is generated from `packages/contracts`, so endpoints, inputs, and outputs are typed end to end with no hand-written duplicates.
+- The API is contract-first with **oRPC**: every endpoint (its input and output Zod schemas) is defined once in `packages/contracts`. The server implements that contract and the client calls it through a typed oRPC client, so endpoints, inputs, and outputs are typed end to end with no hand-written duplicates. Neither app imports the other.
 - The offline queue sits behind an interface (`UploadQueue`) with an IndexedDB adapter and an in-memory fake for tests.
 
 ### 4.3 Module responsibilities
@@ -223,14 +225,15 @@ Modules communicate only through each other's `index.ts`. When the `receipts` mo
 | Repo | pnpm workspaces monorepo | Shared `contracts` and `core` packages. |
 | Client | React + Vite, `vite-plugin-pwa` (Workbox), TanStack Query | Client-only SPA keeps offline behavior simple. |
 | Client storage | IndexedDB (via `idb`) | Durable offline queue for images and pending receipts. |
-| Server | Node + Fastify, `fastify-type-provider-zod` | Routes typed and validated directly from the shared contracts. |
+| Server | Node + Fastify | Serves the API, the built React app, and static files. |
+| API | oRPC (contract-first), with its TanStack Query integration on the client | One endpoint definition in `packages/contracts` types and validates both sides; handles file uploads (receipt images) natively. Chosen over ts-rest and a hand-written layer (ADR in Stage 0). |
 | Validation | Zod | One schema for API, model output, forms, and config. |
 | Database | SQLite (`better-sqlite3`) + Drizzle ORM and migrations | No DB server; household-scale load; backup is a file copy. |
-| Extraction | Vision model on the existing LLM server (oMLX), reached through its relay | Private, free to run, reuses hardware already serving models. Model chosen in Stage 3 (§6.3). |
+| Extraction | Vision model on the existing LLM server (oMLX), reached through its relay | Private, free to run, reuses hardware already serving models. Qwen3.6-35B-A3B (4-bit) for now (§6.3). |
 | Charts | TBD in Stage 6 | Pick when the breakdown views are designed. |
 | Tests | Vitest, Playwright | |
 | Quality tooling | ESLint, Prettier, dependency-cruiser | See §3.6. |
-| Hosting | Native macOS service (LaunchDaemon), no Docker | Runs directly on the Mac under its own standard account: data and backups are plain files, no virtual machine holds memory the models could use, and it starts at boot. The LLM server runs the same way, managed by its own project. See §4.7. |
+| Hosting | Native macOS service (LaunchDaemon), no Docker | Runs directly on the Mac under its own hidden service account: data and backups are plain files, no virtual machine holds memory the models could use, and it starts at boot. The LLM server runs the same way, managed by its own project. See §4.7. |
 
 ### 4.5 Configuration
 Read from `.env` (checked-in `.env.example`), validated at startup:
@@ -252,7 +255,7 @@ Read from `.env` (checked-in `.env.example`), validated at startup:
 
 What this means for the design:
 - **Both services run natively** on this Mac (oMLX uses the GPU through Metal, which Docker on macOS cannot reach). SnapTrack reaches the LLM server at `127.0.0.1`. Hosting and isolation are in §4.7.
-- **Model size budget:** the LLM server loads one model at a time, so the vision model gets the GPU memory the chat model was using. Vision models up to roughly 32B parameters fit comfortably at 4-bit (about 20–25 GB; the current chat models use 19–26 GB). Larger models (~70B) technically fit but are likely too slow to be worth it; the Stage 3 evaluation decides.
+- **Model size budget:** the LLM server loads one model at a time, so the vision model gets the GPU memory the chat model was using. Vision models up to roughly 35B parameters (such as the chosen Qwen3.6-35B-A3B) fit comfortably at 4-bit (about 20–25 GB; the current chat models use 19–26 GB). Larger models (~70B) technically fit but are likely too slow to be worth it; the Stage 3 evaluation decides.
 - **Speed:** expect seconds per receipt for small models and tens of seconds for ~32B models. Extraction is asynchronous, so this never blocks capture.
 - **Always on:** the Mac must not sleep (Energy settings: prevent automatic sleep; start after power failure). SnapTrack, the LLM server, and Tailscale start at boot with no one logged in (§4.7); FileVault is off so a restart needs no password. While the LLM server is stopped, extraction jobs simply wait.
 - **Storage:** at ~0.5 MB per resized receipt image, 1 TB is effectively unlimited even if images are kept forever. Image retention (§6.8) is a privacy and tidiness choice, not a disk-space need.
@@ -262,9 +265,10 @@ What this means for the design:
 SnapTrack runs natively on the Mac, not in Docker. Its data stays in plain files (simple backups and restores), no virtual machine holds memory the models could use, and it starts at boot. Separation comes from macOS accounts instead of a container.
 
 **Accounts**
-- Each service has its own **standard (non-admin) macOS account**: one for SnapTrack (e.g. `snaptrack`), one for the LLM server. Neither can install software, change system settings, or read the other's files. They talk only over `localhost`.
+- Each service has its own **hidden, non-admin macOS service account** (a "role account", created with `sysadminctl -roleAccount`): `_snaptrack` for SnapTrack, and one for the LLM server. Neither can install software, change system settings, or read the other's files. They talk only over `localhost`.
+- A service account has no password, cannot log in, and does not appear on the login screen. The admin account acts as it only through `sudo -u _snaptrack` (for installs, migrations, and checks).
+- macOS does not create a home folder for a role account. Setup creates one by hand (owned by `_snaptrack`, `chmod 700`), and the LaunchDaemon sets `HOME` to it, since pnpm and Node keep caches there.
 - The developer's own admin account does setup, restarts, and fixes, but never runs SnapTrack or installs its packages.
-- No one logs in to the service accounts day to day.
 
 **Files and permissions**
 - SnapTrack's code, data (database, images, imported files, backups), and `.env` live in folders owned by the SnapTrack account that only it can open: `chmod 700` on folders, `600` on `.env`.
@@ -469,6 +473,7 @@ Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainme
 
 ### 6.2 Upload and sync (client → server)
 - The queue is flushed when the app opens, when the connection returns, and after each capture.
+- On first launch the app calls `navigator.storage.persist()`, so the browser is less likely to delete queued receipts when storage runs low (iOS in particular can clear a site's storage if it is not marked persistent). The pending count still shows anything waiting.
 - On Android/Chrome, Background Sync also flushes the queue with the app closed. iOS does not support it, so queued receipts upload the next time the app is opened. The UI shows a pending count so this is visible.
 - Upload is `PUT /receipts/:id` (idempotent). Retrying a receipt the server already has returns its current state. The same endpoint and queue carry manual entries (data, no image), so they also work offline.
 - A queue entry is deleted only after the server confirms it has the image.
@@ -512,10 +517,16 @@ SnapTrack's job queue is the only record of what still needs reading; the relay 
 
 **Access through the relay, not oMLX directly**, with SnapTrack's own API key, so the LLM server records SnapTrack's usage under its own name.
 
-**Model choice.** Decided in Stage 3 with an evaluation harness (a script plus a fixture set of 20+ real household receipts with hand-checked correct answers). It scores each candidate on field accuracy and time per receipt. Candidates:
-- Vision-language models in MLX format that oMLX supports (oMLX runs vision models through `mlx-vlm`, so support depends on the architecture; check oMLX's release notes for each candidate and use a recent oMLX version): e.g. Qwen2.5-VL / Qwen3-VL, Gemma 4 (vision), Llama 3.2 Vision, from ~7B up to ~32B at 4-bit (the host's comfortable limit; §4.6).
+**Model choice.** **Qwen3.6-35B-A3B (4-bit)**, for now. Spot checks on real receipts (a clean one and a slightly crumpled one) matched a large hosted model on every price and total. The model is set by `EXTRACTION_MODEL` (§4.5), so trying another one is a config change, not a code change.
+- Other models may be tried later. Short list:
+  - Qwen3-VL 32B, at 4-bit and 8-bit (dense, so slower, but possibly more accurate on hard receipts).
+  - Qwen3-VL 30B-A3B (the same fast design as the chosen model, from the earlier generation).
+  - Qwen3-VL 8B (much smaller and faster, if accuracy holds).
+  - Gemma 4 with vision.
+  - For two-pass (below): GLM-OCR or PaddleOCR-VL for the transcription, with a text model for structuring.
+- Any candidate must be in MLX format and supported by oMLX (which runs vision models through `mlx-vlm`, so support depends on the architecture; check oMLX's release notes and use a recent oMLX version), and fit the host's memory budget (§4.6).
+- **One-pass vs two-pass comparison, in Stage 9.** Two-pass means an OCR model that oMLX also runs (e.g. GLM-OCR, PaddleOCR-VL, DeepSeek-OCR) transcribes the receipt, then a text model structures it into the extraction schema. That would be a second `ReceiptExtractor` adapter; nothing else changes. Because it needs two models, the relay would switch between them, costing extra swaps, so it is adopted only if the comparison shows a clear accuracy gain.
 - Time per receipt is measured with the model already loaded; the relay pays the swap cost once per run of receipts, not per receipt.
-- Two-step fallback, if no vision model is accurate enough on its own: an OCR model that oMLX also runs (e.g. DeepSeek-OCR, DOTS-OCR, GLM-OCR) reads the text, then a text model structures it into the extraction schema. This is a second `ReceiptExtractor` adapter; nothing else changes. Because it needs two models, the relay would have to switch between them, costing extra swaps, so it is only used if the evaluation shows a clear accuracy gain.
 
 The harness is kept so any future model can be compared against the same fixtures. It scores **store identification separately**: the share of receipts where the model extracted at least one usable identifier, and the accuracy of every store field.
 
@@ -774,7 +785,7 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 ## 9. Security and Privacy
 
 - **Network:** the SnapTrack server listens only on `127.0.0.1`, reached from household devices through `tailscale serve`; the LLM server listens only on the Mac itself (per its own project). Neither is exposed to the internet. SnapTrack's LLM server API key lives in `.env` only.
-- **Isolation:** SnapTrack runs under its own standard macOS account with private folders, blocked install scripts, and outgoing internet blocked (§4.7).
+- **Isolation:** SnapTrack runs under its own hidden, non-admin macOS service account with private folders, blocked install scripts, and outgoing internet blocked (§4.7).
 - **Auth:** username and password per household member, hashed with Argon2. Login sets an HTTP-only, Secure, SameSite cookie session. No public sign-up; an admin command (or first-run setup) creates users.
 - **Secrets:** `.env` is git-ignored and readable only by the SnapTrack account (`600`).
 - **Data leaving the network:** none.
@@ -811,7 +822,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 
 ### Stage 3 — Extraction
 **Build:** extraction schema in `contracts`; `extraction` module; `JobQueue` port with persisted SQLite adapter; `ReceiptExtractor` port with LLM-server adapter and fake, including busy / interrupted replies; the extraction loop (§6.3.1); consistency checks; low-priority request support in the relay (built in the LLM-Server project, §6.3.1); vision model added to the LLM server.
-**Model evaluation:** build the evaluation harness and fixture set; compare candidate models (§6.3); record the choice in an ADR.
+**Model:** Qwen3.6-35B-A3B (4-bit) (§6.3); record the choice in an ADR.
 **Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; an unreadable image ends up `review_required`; a SnapTrack restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. While the relay replies busy, jobs wait without using up attempts and complete once it is free. A receipt interrupted by a chat goes back to the queue and is completed later, and interruptions never count toward the 5-attempt limit. (That the relay switches back to the previous model, and puts chat ahead of receipts, is tested in the LLM-Server project.)
 
 ### Stage 4 — Review and log
@@ -834,6 +845,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 
 ### Stage 9 — Search and view export
 **Build:** search receipts and line items; combined filters; Export button on every list, breakdown, and trend view (§8.2); XLSX writer.
+**Extraction comparison:** a small evaluation script and a set of hand-checked household receipts (kept out of git; they contain card digits), comparing one-pass and two-pass extraction (§6.3) on field accuracy and time per receipt. Prioritize the kinds of receipts that review corrections show the model gets wrong.
 
 ### Stage 10 — Retailer CSV import
 **Build:** `imports` module; format definition schema; generic importer; Amazon format definition; import screen with preview; duplicate skipping; storing uploaded files; superseding older files; retention for imported files; `import_batches`.
@@ -848,11 +860,12 @@ Each stage ends in something that runs and is verified. A stage is done when its
 
 | Question | When it must be decided |
 |---|---|
-| Which vision model (must run on oMLX). | Stage 3 |
+| Whether two-pass extraction (OCR model + text model) or another vision model beats Qwen3.6-35B-A3B (§6.3). | Stage 9 |
 | The relay's low-priority API: how a request is marked low priority, and the exact busy / interrupted replies (§6.3.1). Built in the LLM-Server project. | Stage 3 |
 | How to block outgoing internet for the service accounts (`pf` per-user rules or Little Snitch), and how to allow the package registry only during deploys. | Stage 0 |
 | Whether Tailscale connects at boot with no one logged in (the standalone app, or the `tailscaled` daemon). | Stage 0 |
-| Whether oMLX gets the GPU when run as a LaunchDaemon with no one logged in (tested in the LLM-Server project). | Before Stage 3 |
+| How oRPC mounts on Fastify (its adapter or Node handler), and that a receipt image upload works through it end to end. | Stage 0 |
+| Whether oMLX gets the GPU when run as a LaunchDaemon with no one logged in, under its real service account rather than an admin account (tested in the LLM-Server project). | Before Stage 3 |
 | Chart library. | Stage 6 |
 | How to handle returns and refunds (negative receipts or line items?). | Stage 4 |
 | How to treat receipts split between people. (Several payment methods on one receipt are handled by `payments`.) | Stage 4 |
@@ -872,7 +885,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 
 | Risk | Mitigation |
 |---|---|
-| A local model is less accurate than large hosted models. | Evaluation harness picks the best model that fits; required review step; consistency checks; OCR + text model fallback adapter; identifier learning reduces reliance on the model over time. |
+| A local model is less accurate than large hosted models. | Model spot-checked against a large hosted model; one-pass vs two-pass comparison in Stage 9; required review step; consistency checks; OCR + text model fallback adapter; identifier learning reduces reliance on the model over time. |
 | Extraction is slow on modest hardware. | Extraction is asynchronous, so capture is never blocked; images are resized; jobs run one at a time. |
 | SnapTrack disrupts people chatting on the shared LLM server, or leaves it on the wrong model. | SnapTrack never switches models; the relay does. It runs receipts only when no one is chatting and the server isn't reserved, interrupts them when a chat arrives, and switches back afterward. Interrupted receipts go back to SnapTrack's queue without using up attempts. |
 | A busy LLM server delays extraction for a long time. | Receipts wait safely in the queue; the receipts list shows "waiting for the model server". Unreviewed counting starts once extraction finishes. |
@@ -882,4 +895,4 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | A receipt is matched to the wrong company. | Automatic matches only from identifiers a person confirmed; model guesses and similar names are never applied; conflicts are flagged, not guessed; processor/point-of-sale branding is excluded; a corrected mistake marks the causing identifier ambiguous so it can't recur; store identification has its own score in the evaluation harness. |
 | Home server downtime (sleep, updates, power loss). | Mac set to never sleep and restart after power failure; FileVault off so restarts need no password; services start at boot as LaunchDaemons with no login needed; phones keep queueing offline; jobs resume after restart; nightly backups. |
 | The Mac is stolen; with FileVault off, its disk can be read. | Accepted trade-off for unattended restarts (§4.7). Backup drives are encrypted; the Mac is kept somewhere private. |
-| A compromised npm package reads household data or sends it out. | Install scripts blocked except an approved list; lockfile-only installs; its own standard account with private folders; outgoing internet blocked for that account (§4.7). |
+| A compromised npm package reads household data or sends it out. | Install scripts blocked except an approved list; lockfile-only installs; its own hidden service account with private folders; outgoing internet blocked for that account (§4.7). |

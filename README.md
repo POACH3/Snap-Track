@@ -91,9 +91,9 @@ Expenses without a paper receipt can be entered by hand, as a quick entry (store
 |---|---|
 | Language | TypeScript throughout, in a pnpm workspaces monorepo |
 | Client | React + Vite installable web app (PWA), responsive from phone to desktop, with an IndexedDB upload queue and offline support |
-| Server | Node + Fastify, with Zod schemas shared between client and server |
+| Server | Node + Fastify, with a contract-first oRPC API whose Zod schemas are shared between client and server |
 | Database | SQLite with Drizzle ORM and migrations |
-| Extraction | A vision model on the existing LLM server (oMLX), chosen by an evaluation in Stage 3 |
+| Extraction | A vision model on the existing LLM server (oMLX): Qwen3.6-35B-A3B (4-bit) for now, with other models and two-pass extraction compared in Stage 9 |
 | Hosting | Runs natively on the Mac as a macOS service under its own account, with no Docker; the LLM server runs the same way |
 | Network | Tailscale, for private access and HTTPS |
 | Quality | Vitest, Playwright, ESLint, Prettier and dependency-cruiser, all run by one `pnpm check` command |
@@ -111,18 +111,29 @@ Each stage ends in something that runs and is tested.
 | 0 | Scaffold, quality checks, native macOS service, HTTPS over Tailscale, installable placeholder app |
 | 1 | Accounts and login |
 | 2 | Capture and upload (online) |
-| 3 | Extraction with the vision model, plus a model evaluation |
+| 3 | Extraction with the vision model |
 | 4 | Review, stores, items, categories, tags and manual entry |
 | **5** | **Offline capture and sync, backups, settings and full export: first usable version (MVP)** |
 | 6 | Monthly breakdowns and charts |
 | 7 | Trends |
 | 8 | Price tracking and spike flags |
-| 9 | Search and view export |
+| 9 | Search and view export, plus an extraction model comparison |
 | 10 | Retailer CSV import |
 
 ### Known limitations
-- Extraction accuracy on faded, crumpled or very long receipts has not been evaluated yet; Stage 3 measures it.
+- Extraction has been spot-checked only on a clean and a slightly crumpled receipt (see below); faded or very long receipts are untested until the Stage 9 comparison.
 - iPhones do not support background upload, so receipts captured offline on an iPhone upload the next time the app is opened.
+
+### Early extraction tests
+
+Informal spot checks from 2026-11-14, ahead of the Stage 3 evaluation. Each model got the same image and the same prompt and returned a plain-text transcription only (no structured data). Claude Sonnet 5.5 is a cloud model used only as a reference for comparison; it is not part of the app.
+
+| Receipt | Qwen3.6-35B-A3B (4-bit, local) | Claude Sonnet 5.5 (reference) |
+|---|---|---|
+| Clean grocery receipt, 6 lines with item discounts | Every value matched the reference: names, prices, codes, totals. Column spacing was not kept. | Kept the column layout and indentation; noted the logo. |
+| Slightly crumpled auto-parts receipt, one item with a fee line | All prices and totals correct. Read one zero as the letter O in a payment code. Added an intro sentence before the text. Stopped one line earlier at the end. | All values correct; kept the column layout. |
+
+Both receipts add up (lines, tax and totals), and the two models agreed on every price and total. Neither receipt was faded, long, or had weighed items, quantity lines or separate coupons, so these tests do not yet show where the models differ on hard receipts.
 
 ---
 
