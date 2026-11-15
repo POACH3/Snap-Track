@@ -138,5 +138,10 @@ export function createAuthService(deps: AuthDeps) {
       });
       return ok(null);
     },
+
+    /** Display names of the given users, for showing who logged what. Unknown ids are left out. */
+    displayNames(ids: readonly string[]): Map<string, string> {
+      return deps.users.displayNames(ids);
+    },
   };
 }

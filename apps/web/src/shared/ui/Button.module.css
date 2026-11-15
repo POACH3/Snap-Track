@@ -30,6 +30,15 @@
   background: var(--accent-hover);
 }
 
+.secondary {
+  background: var(--surface-raised);
+  border-color: var(--border);
+  color: var(--text-heading);
+}
+.secondary:hover:not(:disabled) {
+  border-color: var(--border-hover);
+}
+
 .ghost {
   background: transparent;
   color: var(--text-body);

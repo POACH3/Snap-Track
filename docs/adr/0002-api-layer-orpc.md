@@ -22,6 +22,7 @@ byte-for-byte (same SHA-256, size and MIME type).
 ## Consequences
 - File uploads work natively; no separate upload endpoint.
 - Because Fastify does not parse `/rpc` bodies, its `bodyLimit` does not apply there.
-  Stage 2 must set an upload size limit before accepting images.
+  The HTTP server sets its own limit on `/rpc` requests (100 MB; Stage 2, see
+  `docs/feature-plans/capture-and-upload-plan.md`).
 - ts-rest was not chosen: its file-upload support is thinner, and oRPC's TanStack Query
   integration removes hand-written query hooks.

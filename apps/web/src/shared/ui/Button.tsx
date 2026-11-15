@@ -2,8 +2,11 @@ import type { ButtonHTMLAttributes } from "react";
 import styles from "./Button.module.css";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  /** primary: the one main action on a screen. ghost: low emphasis, e.g. in a toolbar (docs/DESIGN.md). */
-  variant?: "primary" | "ghost";
+  /**
+   * primary: the one main action on a screen. secondary: low emphasis beside it (Cancel, Back,
+   * other ways to do the same thing). ghost: low emphasis in a toolbar (docs/DESIGN.md).
+   */
+  variant?: "primary" | "secondary" | "ghost";
   /** While the action runs the button keeps its size and label, and is disabled. */
   busy?: boolean;
   fullWidth?: boolean;

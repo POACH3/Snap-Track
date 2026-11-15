@@ -184,6 +184,7 @@ Component names below are placeholders until the client exists. **(proposed)**
 | Notification after an action | Toast |
 | Empty list | Empty state: one sentence plus the action that fills the list |
 | Tabs | Phone: glass tab bar. Desktop: segmented control **(proposed)** |
+| Side navigation (640px and up) | Solid, not glass: a column on the page background with the main action button on top, then 44px-tall items (20px icon, 15px label, `--text-body`, 12px radius). Hover: `--surface-raised` fill. Selected: `--surface-raised` fill with `--accent-text` icon and label. The main action is hidden on a screen that has its own, so each screen keeps one. **(proposed)** |
 | Status and categories | Pill: 26px tall, fully round, 13px / 500. Variants: plain, accent, warning, price up, price down |
 | Icons | Lucide only, 2px stroke, 18px in buttons, 20px in the tab bar, 14px in pills |
 
@@ -305,5 +306,4 @@ For a short notification after an action: an error, or a success.
 *Records places the code already breaks this guide, so they are fixed on purpose rather than copied.*
 
 <!-- One bullet per mismatch: date, what differs, where (file and class or component). -->
-- 2026-11-15: Login errors that follow the **Log in** action ("Too many failed attempts…" and "Can't reach SnapTrack…") show as a red message under the form, not as an error toast ("Feedback", "Toasts"), because no toast component exists yet. The wrong-password message is a field error on the password field, which does follow the guide. Where: `apps/web/src/features/auth/LoginScreen.tsx` (`formMessage`, `.formError` in `LoginScreen.module.css`). Fix when the toast component is built (Stage 2). (The app shell's "Can't reach SnapTrack" card with **Try again**, in `apps/web/src/app/App.tsx`, is a page that failed to load, not the result of an action, so it is not a toast case.)
 - 2026-11-15: The loader (`apps/web/src/shared/ui/Loader.tsx`) disappears at once when content arrives instead of fading out over 160ms ("Loading", "Leaving"). Fix when page transitions are built.

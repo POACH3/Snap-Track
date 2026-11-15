@@ -2,6 +2,7 @@ import { isDefinedError } from "@orpc/client";
 import { useState, type SyntheticEvent } from "react";
 import { Button } from "../../shared/ui/Button.tsx";
 import { TextField } from "../../shared/ui/TextField.tsx";
+import { useToast } from "../../shared/ui/toast-context.ts";
 import styles from "./LoginScreen.module.css";
 import { useLogin } from "./use-session.ts";
 
@@ -14,6 +15,7 @@ const REQUIRED: Record<Field, string> = {
 
 export function LoginScreen() {
   const login = useLogin();
+  const toast = useToast();
   const [values, setValues] = useState<Record<Field, string>>({ username: "", password: "" });
   const [touched, setTouched] = useState<Record<Field, boolean>>({ username: false, password: false });
 
@@ -22,12 +24,6 @@ export function LoginScreen() {
 
   const error = login.error;
   const wrongCredentials = isDefinedError(error) && error.code === "INVALID_CREDENTIALS";
-  const formMessage =
-    error === null || wrongCredentials
-      ? undefined
-      : isDefinedError(error) && error.code === "TOO_MANY_ATTEMPTS"
-        ? `Too many failed attempts. Try again in ${String(Math.ceil(error.data.retryAfterSeconds / 60))} minutes.`
-        : "Can't reach SnapTrack. Check your connection and try again.";
 
   function update(field: Field, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -38,7 +34,28 @@ export function LoginScreen() {
     event.preventDefault();
     setTouched({ username: true, password: true });
     if (values.username.trim() === "" || values.password === "") return;
-    login.mutate({ username: values.username, password: values.password });
+    login.mutate(
+      { username: values.username, password: values.password },
+      {
+        // A wrong password is a field error; anything else is the result of the action: a toast (docs/DESIGN.md).
+        onError: (failure) => {
+          if (isDefinedError(failure) && failure.code === "INVALID_CREDENTIALS") return;
+          toast(
+            isDefinedError(failure)
+              ? {
+                  kind: "error",
+                  title: "Too many failed attempts.",
+                  detail: `Try again in ${String(Math.ceil(failure.data.retryAfterSeconds / 60))} minutes.`,
+                }
+              : {
+                  kind: "error",
+                  title: "Can't reach SnapTrack.",
+                  detail: "Check your connection and try again.",
+                },
+          );
+        },
+      },
+    );
   }
 
   return (
@@ -81,11 +98,6 @@ export function LoginScreen() {
         <Button type="submit" fullWidth busy={login.isPending}>
           Log in
         </Button>
-        {formMessage !== undefined && (
-          <p className={styles.formError} role="alert">
-            {formMessage}
-          </p>
-        )}
       </form>
     </main>
   );

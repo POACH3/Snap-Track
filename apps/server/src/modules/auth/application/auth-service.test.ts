@@ -244,3 +244,21 @@ describe("setPassword", () => {
     });
   });
 });
+
+describe("displayNames", () => {
+  it("returns each known user's display name and leaves out unknown ids", async () => {
+    const created = await auth.createUser({ username: "alex", displayName: "Alex", password: PASSWORD });
+    if (!created.ok) throw new Error("setup failed");
+    const sam = await auth.login({ username: "sam", password: PASSWORD });
+    if (!sam.ok) throw new Error("setup failed");
+    const unknown = "00000000-0000-4000-8000-000000000000";
+    const names = auth.displayNames([created.value.id, sam.value.user.id, unknown, created.value.id]);
+    expect(names).toEqual(
+      new Map([
+        [created.value.id, "Alex"],
+        [sam.value.user.id, "Sam Smith"],
+      ]),
+    );
+    expect(auth.displayNames([])).toEqual(new Map());
+  });
+});

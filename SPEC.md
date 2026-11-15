@@ -211,7 +211,7 @@ modules/receipts/
 | Module | Owns | Depends on |
 |---|---|---|
 | `auth` | users, sessions, login | — |
-| `receipts` | receipts, line items, images, receipt lifecycle, consistency checks, image retention cleanup, updating its own rows when catalog entries are merged | `catalog` (to resolve stores/items/categories), `settings` (retention period) |
+| `receipts` | receipts, line items, images, receipt lifecycle, consistency checks, image retention cleanup, updating its own rows when catalog entries are merged | `catalog` (to resolve stores/items/categories), `settings` (retention period), `auth` (household members' display names, through its own `UserDirectory` port, wired in the composition root) |
 | `extraction` | extraction jobs, sending low-priority requests to the LLM server's relay, handling its busy / interrupted replies, validating model output | `receipts` (to save results), `catalog` (the category hierarchy, for suggestions) |
 | `catalog` | stores (companies), items, categories, store and item identifiers, store identification, matching and learning | — |
 | `settings` | household settings: reading, validating, and changing them | — |
@@ -228,13 +228,14 @@ Modules communicate only through each other's `index.ts`. When the `receipts` mo
 |---|---|---|
 | Language | TypeScript throughout | One language for client, server, and shared types. |
 | Repo | pnpm workspaces monorepo | Shared `contracts` and `core` packages. |
-| Client | React + Vite, `vite-plugin-pwa` (Workbox), TanStack Query | Client-only SPA keeps offline behavior simple. |
+| Client | React + Vite, `vite-plugin-pwa` (Workbox), TanStack Query, React Router, Lucide icons | Client-only SPA keeps offline behavior simple. |
 | Client storage | IndexedDB (via `idb`) | Durable offline queue for images and pending receipts. |
 | Server | Node + Fastify | Serves the API, the built React app, and static files. |
 | API | oRPC (contract-first), with its TanStack Query integration on the client | One endpoint definition in `packages/contracts` types and validates both sides; handles file uploads (receipt images) natively. Chosen over ts-rest and a hand-written layer (ADR in Stage 0). |
 | Validation | Zod | One schema for API, model output, forms, and config. |
 | Database | SQLite (`better-sqlite3`) + Drizzle ORM and migrations | No DB server; household-scale load; backup is a file copy. |
 | Extraction | Vision model on the existing LLM server (oMLX), reached through its relay | Private, free to run, reuses hardware already serving models. Qwen3.6-35B-A3B (4-bit) for now (§6.3). |
+| Image conversion | macOS's built-in `sips`, behind the `ImageConverter` port | Converts HEIC and shrinks images the browser couldn't; nothing to install, runs natively on ARM64 (ADR 0005). |
 | Charts | TBD in Stage 6 | Pick when the breakdown views are designed. |
 | Tests | Vitest, Playwright | |
 | Quality tooling | ESLint, Prettier, dependency-cruiser | See §3.6. |
@@ -313,7 +314,7 @@ Everything lives under `/opt/snap-track/` (`root:_snaptrack`, `750`):
 
 **Runtime**
 - The Node and pnpm versions are pinned in the repo (`.node-version`, read by `mise`; `engines` and `packageManager` in `package.json`). Deploy installs exactly those versions into `runtime/` with `mise`, and the LaunchDaemon starts that Node by its full path, so the service never runs whatever `node` happens to be on the system.
-- System libraries SnapTrack needs (e.g. for HEIC conversion, §12) are installed with Homebrew from the admin account and listed in `deploy/` setup notes.
+- System libraries SnapTrack needs are installed with Homebrew from the admin account and listed in `deploy/` setup notes. None are needed so far: HEIC conversion uses macOS's built-in `sips` (`/usr/bin/sips`, ADR 0005).
 
 **Network**
 - SnapTrack listens only on `127.0.0.1` (production port 4300). `tailscale serve` provides HTTPS on the Tailscale address, port 8443 (`https://node.tailf79c3a.ts.net:8443`; port 443 is the LLM server's chat page), and forwards to it. Nothing listens on the local network or the internet.
@@ -426,6 +427,7 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 - `store_id` (the company; null until identified)
 - `store_matched_by`: `identifier` (automatic, from known identifiers), `user` (chosen by a person), or `import_format` (set by a retailer import); null while unidentified
 - `store_evidence` (JSON, schema in `packages/contracts`): everything extracted about the store (§6.3.2), plus which identifiers produced the match. Kept so the match can be explained ("Matched by phone number") and re-run later.
+- `captured_at` — when the photo was taken on the device (for photos chosen from a library or a folder, the file's date). The receipts list is ordered by it, so receipts uploaded late still appear in the order they were taken.
 - `purchased_at` (local date and time as printed; time optional)
 - `subtotal_cents`, `tax_cents` (total of all tax lines), `tip_cents`, `total_cents`
 - `discount_cents` — receipt-wide discounts only (e.g. "$5 off your order"). Per-item discounts live on line items and are never repeated here.
@@ -445,6 +447,7 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 **`receipt_images`** (receipts) — the photos of a receipt, in order. Most receipts have one; a long receipt may have several.
 - `id`, `receipt_id`, `position` (order, top of the receipt first)
 - `image_key` (opaque key for the `FileStore` port; null once the image is deleted under the retention rules, §6.8)
+- `thumbnail_key` — a small JPEG (longest side 400 px) made by the server at upload, for the receipts list; deleted with the image
 - `image_sha256` (catches the same photo uploaded twice; kept after the image is deleted)
 - `image_deleted_at` (null while the image exists)
 - Unique on (`receipt_id`, `position`). A receipt's photos are always deleted together (§6.8).
@@ -506,7 +509,7 @@ Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainme
    - **Phone, camera:** **Snap** opens the camera (`<input type="file" accept="image/*" capture="environment">`).
    - **Phone, library:** **Choose photos** opens the photo library with multi-select. Each chosen photo becomes its own receipt.
    - **Desktop:** **Upload images** opens a file picker (multi-select), or image files can be dragged onto the page. Each file becomes its own receipt.
-   - **Long receipts:** after a photo is taken or chosen, the capture screen offers **Add another photo** (camera or library). Each photo added this way joins the same receipt, in order. The receipt is uploaded when the user taps **Done** or leaves the capture screen, so extraction always sees every photo.
+   - **Long receipts:** after a single photo is taken or chosen, the capture screen offers **Add another photo** (camera or library). Each photo added this way joins the same receipt, in order. (When several photos are chosen together, each is its own receipt, as above, and they upload at once.) The receipt is uploaded when the user taps **Done** or leaves the capture screen, so extraction always sees every photo.
    - All of these feed the same capture pipeline (steps 2–4); only the way the image is chosen differs.
 2. The client shrinks each photo to at most about 4 million pixels, keeping its shape (never enlarging), and re-encodes it as JPEG, which cuts upload size and model processing time. The limit is on total pixels, not the longest side, so a long, narrow receipt keeps enough width to read (a 1:5 receipt comes out about 900 × 4500 px). Accepted inputs: JPEG, PNG, and HEIC (the iPhone's default photo format). If the browser can't decode an image itself (e.g. HEIC in Chrome on a desktop), the original file is uploaded and the server converts and shrinks it the same way.
 3. The client generates the receipt ID and saves `{id, image blobs (in order), captured_at, user}` to the upload queue **before** trying to upload.
@@ -678,7 +681,7 @@ Over time, stores and repeat purchases are matched by identifier, with no model 
   - `review_required` receipts (and any stuck in `uploaded` / `extracting`) are deleted entirely, since without the image there is no data and nothing left to enter.
   - Set to keep indefinitely, nothing is ever deleted: unreviewed receipts keep their images and review-required receipts wait until someone enters them.
   - Warning: from 30 days before the deadline (or a third of the period, if shorter), the receipt list marks the receipt "Image will be deleted in N days — review now" (or "Receipt will be deleted in N days — enter it now" for review-required ones).
-- **Cleanup:** a nightly job (on the `JobQueue`) applies all of the above: deletes due images through the `FileStore` port (clearing `image_key` and setting `image_deleted_at` on every `receipt_images` row of the receipt; a receipt's photos are always deleted together) and deletes due review-required receipts. Deciding what is due ("keep / delete image / delete receipt") is one pure domain function covering every case, tested on its own.
+- **Cleanup:** a nightly job (on the `JobQueue`) applies all of the above: deletes due images through the `FileStore` port (clearing `image_key` and `thumbnail_key` and setting `image_deleted_at` on every `receipt_images` row of the receipt; a receipt's photos are always deleted together) and deletes due review-required receipts. Deciding what is due ("keep / delete image / delete receipt") is one pure domain function covering every case, tested on its own.
 - **What is kept when only the image is deleted:** all extracted data, line items, and `image_sha256` (so duplicate detection still works). Analytics are unaffected.
 - **Shortening a period:** before saving, the Settings screen shows how many images (and, for the unreviewed setting, how many review-required receipts) the new value will delete, and asks for confirmation. Deletion happens at the next nightly run, not instantly, so a mistaken change can be reverted the same day.
 - **After deletion:** the receipt view shows "Image removed on <date>" with the reason (confirmed-receipt retention, or not reviewed in time) in place of the image; the data side is unchanged and still editable.
@@ -916,7 +919,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | Spike threshold: is 1.5× / $25 useful or noisy? | Stage 8 |
 | Which extracted fields each screen displays (all are stored regardless). | Stage 4 onward, per screen |
 | The vision model's own image-size limit in oMLX / `mlx-vlm` (it may shrink images again before reading them), and whether it must be raised so long receipts stay readable (§6.1). | Stage 3 |
-| Server-side image conversion library for HEIC (must run natively on macOS ARM64; macOS's built-in `sips` is one option, behind an adapter). | Stage 2 |
+| Decided: server-side image conversion uses macOS's built-in `sips`, behind the `ImageConverter` port (ADR 0005). | Stage 2 (done) |
 | What "other records from online retailers" covers beyond CSV (e.g. PDF invoices, order confirmation emails), and whether any are in scope. Currently digital/PDF receipts are a non-goal. | Stage 10 |
 | Other retailers' report formats, as they're supplied. | Stage 10 |
 | Status of imported entries: `unreviewed` (proposed) or treated as checked like manual entries. | Stage 10 |

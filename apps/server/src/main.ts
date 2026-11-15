@@ -1,4 +1,5 @@
 // Composition root (SPEC.md §3.1 rule 5): validates config, wires adapters to ports, starts the server.
+import { mkdirSync } from "node:fs";
 import { loadConfig } from "./config/load-config.ts";
 import { openSqlite, toDrizzle } from "./platform/db/connection.ts";
 import { countPendingMigrations } from "./platform/db/migrations.ts";
@@ -8,13 +9,14 @@ import { os } from "./platform/http/rpc.ts";
 import { systemClock } from "./platform/system-clock.ts";
 import { createAuthModule } from "./modules/auth/index.ts";
 import { healthRouter } from "./modules/health/index.ts";
+import { createReceiptsModule, FileSystemFileStore, SipsImageConverter } from "./modules/receipts/index.ts";
 
 const config = loadConfig(process.env);
 if (!config.ok) {
   console.error(`SnapTrack will not start: the configuration is invalid.\n  ${config.error.join("\n  ")}`);
   process.exit(1);
 }
-const { NODE_ENV, PORT, DATABASE_PATH, SESSION_SECRET, PUBLIC_ORIGIN } = config.value;
+const { NODE_ENV, PORT, DATABASE_PATH, IMAGE_DIR, SESSION_SECRET, PUBLIC_ORIGIN } = config.value;
 
 let sqlite;
 try {
@@ -42,11 +44,23 @@ const auth = createAuthModule({
   secureCookies: PUBLIC_ORIGIN.startsWith("https://"),
 });
 
-const router = os.router({ auth: auth.router, health: healthRouter });
+// The service writes only under its data folder (SPEC.md §4.7), which holds IMAGE_DIR.
+mkdirSync(IMAGE_DIR, { recursive: true });
+const receipts = createReceiptsModule({
+  db,
+  clock: systemClock,
+  transaction,
+  files: new FileSystemFileStore(IMAGE_DIR),
+  converter: new SipsImageConverter(),
+  users: auth.service,
+});
+
+const router = os.router({ auth: auth.router, health: healthRouter, receipts: receipts.router });
 
 const app = createHttpServer({
   router,
   authenticate: (cookieHeader) => auth.authenticate(cookieHeader),
+  routes: [receipts.routes],
   logLevel: NODE_ENV === "production" ? "info" : "debug",
   webDistDir: NODE_ENV === "development" ? undefined : new URL("../../web/dist", import.meta.url).pathname,
 });

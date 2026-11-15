@@ -1,8 +1,9 @@
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "lib": ["es2024", "dom", "dom.iterable"]
   },
-  "include": ["*.ts", "tooling/**/*.ts"],
+  "include": ["*.ts", "tooling/**/*.ts", "apps/web/e2e/**/*.ts"],
   "exclude": ["tooling/boundary-fixtures"]
 }

@@ -1,0 +1,20 @@
+/* A Surface panel (docs/DESIGN.md, "Surfaces"). */
+.empty {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  padding: 20px;
+}
+
+.empty h3 {
+  margin: 0 0 4px;
+}
+
+.text {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.action {
+  margin-top: 16px;
+}

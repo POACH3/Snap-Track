@@ -1,0 +1,30 @@
+/* Pills (docs/DESIGN.md, "Components"): 26px tall, fully round, 13px / 500, 14px icons. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.plain {
+  background: var(--surface-raised);
+  color: var(--text-body);
+}
+
+.accent {
+  background: var(--accent-tint);
+  border-color: var(--accent-tint-border);
+  color: var(--accent-text);
+}
+
+.warning {
+  background: var(--warning-tint);
+  border-color: var(--warning-border);
+  color: var(--warning);
+}

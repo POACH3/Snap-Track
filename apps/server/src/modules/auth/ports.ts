@@ -8,6 +8,8 @@ export interface UserRepository {
   /** Returns false if the username is taken. */
   insert(user: User): boolean;
   updatePasswordHash(id: Id, passwordHash: string): void;
+  /** Display names of the given users. Unknown ids are left out. */
+  displayNames(ids: readonly Id[]): Map<Id, string>;
 }
 
 export interface SessionRepository {

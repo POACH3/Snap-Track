@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { createTestApp, CSRF_HEADER } from "../../testing/create-test-app.ts";
 
@@ -39,5 +40,29 @@ describe("HTTP server", () => {
     await app.inject({ url: "/healthz" });
     await app.inject({ url: "/healthz" });
     expect(ids.size).toBe(2);
+  });
+
+  it("cuts off a body sent without Content-Length once it passes the size limit", async () => {
+    const { app } = createTestApp({ maxRequestBytes: 1000 });
+    // The request is destroyed, which closes the connection (inject reports it as an error).
+    await expect(
+      app.inject({
+        method: "POST",
+        url: "/rpc/health/ping",
+        headers: { ...CSRF_HEADER, "content-type": "application/json", "transfer-encoding": "chunked" },
+        payload: Readable.from(Array.from({ length: 20 }, () => "x".repeat(100))),
+      }),
+    ).rejects.toThrow(/size limit/);
+  });
+
+  it("reads a small body sent without Content-Length normally", async () => {
+    const { app } = createTestApp({ maxRequestBytes: 1000 });
+    const response = await app.inject({
+      method: "POST",
+      url: "/rpc/auth/logout",
+      headers: { ...CSRF_HEADER, "content-type": "application/json", "transfer-encoding": "chunked" },
+      payload: Readable.from([JSON.stringify({ json: {} })]),
+    });
+    expect(response.statusCode).toBe(200);
   });
 });

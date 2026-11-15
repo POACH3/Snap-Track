@@ -1,5 +1,5 @@
 import type { Clock, Id } from "@snaptrack/core";
-import { eq, lte } from "drizzle-orm";
+import { eq, inArray, lte } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type { Session, User } from "../domain/user.ts";
 import type { SessionRepository, UserRepository } from "../ports.ts";
@@ -51,6 +51,16 @@ export class SqliteUserRepository implements UserRepository {
       .set({ passwordHash, updatedAt: this.#clock.now().toISOString() })
       .where(eq(users.id, id))
       .run();
+  }
+
+  displayNames(ids: readonly Id[]): Map<Id, string> {
+    if (ids.length === 0) return new Map();
+    const rows = this.#db
+      .select({ id: users.id, displayName: users.displayName })
+      .from(users)
+      .where(inArray(users.id, [...new Set(ids)]))
+      .all();
+    return new Map(rows.map((row) => [row.id, row.displayName]));
   }
 }
 

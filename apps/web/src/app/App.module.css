@@ -4,27 +4,6 @@
   padding: max(24px, env(safe-area-inset-top)) 16px 24px;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.header .eyebrow {
-  margin: 0;
-}
-
-.eyebrow {
-  margin: 0 0 4px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -42,8 +21,4 @@
 
 .muted {
   color: var(--text-muted);
-}
-
-.numeric {
-  font-variant-numeric: tabular-nums;
 }

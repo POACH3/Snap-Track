@@ -1,0 +1,43 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.screen h1 {
+  margin: 0;
+}
+
+/* A Surface panel (docs/DESIGN.md, "Surfaces"). */
+.card {
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+.card p {
+  margin: 0;
+}
+
+.eyebrow {
+  margin-bottom: 4px !important;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.name {
+  color: var(--text-heading);
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.logout {
+  margin-top: 16px;
+}

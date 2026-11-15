@@ -1,0 +1,144 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 60dvh;
+}
+
+.screen h1 {
+  margin: 0;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.hint strong {
+  color: var(--text-body);
+  font-weight: 600;
+}
+
+/* Desktop: a Surface panel files can be dropped on (docs/DESIGN.md, "Surfaces"). */
+.dropZone {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  text-align: center;
+  transition:
+    background-color var(--transition),
+    border-color var(--transition);
+}
+
+.dragging {
+  background: var(--accent-tint);
+  border-color: var(--accent-tint-border);
+}
+
+.dropIcon {
+  color: var(--text-muted);
+}
+
+.dropText {
+  margin: 0;
+}
+
+.phoneActions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.photo {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+.photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.noPreview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.position {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-heading);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.draftActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.notice {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.draftActions .desktopOnly {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .draftActions > * {
+    flex: 1 1 100%;
+  }
+}
+
+@media (min-width: 640px) {
+  .dropZone {
+    display: flex;
+  }
+  .phoneActions,
+  .draftActions .phoneOnly {
+    display: none;
+  }
+  .draftActions .desktopOnly {
+    display: inline;
+  }
+}

@@ -25,14 +25,17 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          navigateFallbackDenylist: [/^\/rpc\//, /^\/healthz$/],
+          navigateFallbackDenylist: [/^\/rpc\//, /^\/files\//, /^\/healthz$/],
           // Inter is self-hosted (docs/DESIGN.md); keep the Latin subsets for offline use.
           globPatterns: ["**/*.{js,css,html,png,webmanifest}", "assets/inter-latin-*.woff2"],
         },
       }),
     ],
     server: {
-      proxy: { "/rpc": `http://127.0.0.1:${env["PORT"] ?? "4310"}` },
+      proxy: {
+        "/rpc": `http://127.0.0.1:${env["PORT"] ?? "4310"}`,
+        "/files": `http://127.0.0.1:${env["PORT"] ?? "4310"}`,
+      },
     },
   };
 });

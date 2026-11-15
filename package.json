@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p . && pnpm -r --no-bail typecheck",
     "boundaries": "depcruise apps packages",
     "test": "vitest run",
+    "test:e2e": "pnpm build && playwright test",
     "db:generate": "pnpm --filter @snaptrack/server db:generate",
     "db:migrate": "pnpm --filter @snaptrack/server db:migrate",
     "user:create": "pnpm --filter @snaptrack/server user:create",
@@ -24,6 +25,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.65.0",
     "@types/node": "^26.6.6",
     "dependency-cruiser": "18.7.2",
     "eslint": "10.14.0",

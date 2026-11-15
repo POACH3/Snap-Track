@@ -1,0 +1,9 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.screen h1 {
+  margin: 0;
+}

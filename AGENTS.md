@@ -82,7 +82,9 @@ project_root/
 ├── apps/
 │   ├── server/              # drizzle/ (generated migrations), drizzle.config.ts
 │   │   └── src/             # main.ts (composition root), cli/ (admin commands), config/, platform/ (db, HTTP/oRPC), modules/<feature>/, testing/ (whole-app test helpers)
-│   └── web/src/             # React PWA: app/ (routing, layout, theme.css), features/<feature>/, shared/ (UI components, API client, hooks)
+│   └── web/
+│       ├── src/             # React PWA: app/ (routing, layout, theme.css), features/<feature>/, shared/ (UI components, API client, hooks)
+│       └── e2e/             # Playwright specs and fixtures (`pnpm test:e2e`)
 ├── packages/
 │   ├── contracts/           # Zod schemas and the oRPC API contract (single source of truth for data shapes)
 │   └── core/                # money, ids, Result type, Transaction port type
@@ -94,7 +96,7 @@ project_root/
 └── .claude/                 # Claude Code only: settings.json (shared permissions), rules/ (agent rules); settings.local.json is personal and git-ignored
 ```
 
-Root config: `pnpm-workspace.yaml` (workspaces, `allowBuilds` install-script allowlist, `minimumReleaseAge`), `.dependency-cruiser.mjs` (boundary rules), `eslint.config.js`, `.prettierrc.json`, `vitest.config.ts`, `tsconfig.base.json`, `.node-version`.
+Root config: `pnpm-workspace.yaml` (workspaces, `allowBuilds` install-script allowlist, `minimumReleaseAge`), `.dependency-cruiser.mjs` (boundary rules), `eslint.config.js`, `.prettierrc.json`, `vitest.config.ts`, `playwright.config.ts` (end-to-end projects and test server), `tsconfig.base.json`, `.node-version`.
 
 The server has no build step: Node runs its TypeScript directly, so code must stay erasable-syntax only (no enums, namespaces or constructor parameter properties) and import local files with `.ts` extensions (ADR 0003).
 
