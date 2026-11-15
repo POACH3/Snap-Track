@@ -1,9 +1,12 @@
 // Composition root (SPEC.md §3.1 rule 5): validates config, wires adapters to ports, starts the server.
 import { loadConfig } from "./config/load-config.ts";
-import { openSqlite } from "./platform/db/connection.ts";
+import { openSqlite, toDrizzle } from "./platform/db/connection.ts";
 import { countPendingMigrations } from "./platform/db/migrations.ts";
+import { SqliteTransaction } from "./platform/db/sqlite-transaction.ts";
 import { createHttpServer } from "./platform/http/create-http-server.ts";
 import { os } from "./platform/http/rpc.ts";
+import { systemClock } from "./platform/system-clock.ts";
+import { createAuthModule } from "./modules/auth/index.ts";
 import { healthRouter } from "./modules/health/index.ts";
 
 const config = loadConfig(process.env);
@@ -11,7 +14,7 @@ if (!config.ok) {
   console.error(`SnapTrack will not start: the configuration is invalid.\n  ${config.error.join("\n  ")}`);
   process.exit(1);
 }
-const { NODE_ENV, PORT, DATABASE_PATH } = config.value;
+const { NODE_ENV, PORT, DATABASE_PATH, SESSION_SECRET, PUBLIC_ORIGIN } = config.value;
 
 let sqlite;
 try {
@@ -28,10 +31,22 @@ if (pending > 0) {
   process.exit(1);
 }
 
-const router = os.router({ health: healthRouter });
+const db = toDrizzle(sqlite);
+const transaction = new SqliteTransaction(sqlite);
+
+const auth = createAuthModule({
+  db,
+  clock: systemClock,
+  transaction,
+  sessionSecret: SESSION_SECRET,
+  secureCookies: PUBLIC_ORIGIN.startsWith("https://"),
+});
+
+const router = os.router({ auth: auth.router, health: healthRouter });
 
 const app = createHttpServer({
   router,
+  authenticate: (cookieHeader) => auth.authenticate(cookieHeader),
   logLevel: NODE_ENV === "production" ? "info" : "debug",
   webDistDir: NODE_ENV === "development" ? undefined : new URL("../../web/dist", import.meta.url).pathname,
 });

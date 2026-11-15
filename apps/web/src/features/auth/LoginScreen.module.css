@@ -1,0 +1,30 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+
+/* A Surface panel (docs/DESIGN.md, "Surfaces"), small modal width. */
+.card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+}
+
+.title {
+  margin: 0 0 8px;
+}
+
+.formError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}

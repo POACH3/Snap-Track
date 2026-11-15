@@ -1,5 +1,5 @@
-import { oc } from "@orpc/contract";
 import { z } from "zod";
+import { publicProcedure } from "./procedure.ts";
 
 export const PingOutput = z.object({
   status: z.literal("ok"),
@@ -8,5 +8,5 @@ export const PingOutput = z.object({
 export type PingOutput = z.infer<typeof PingOutput>;
 
 export const healthContract = {
-  ping: oc.route({ method: "GET" }).output(PingOutput),
+  ping: publicProcedure.route({ method: "GET" }).output(PingOutput),
 };

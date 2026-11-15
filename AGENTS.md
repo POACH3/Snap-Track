@@ -83,7 +83,7 @@ project_root/
 ├── AGENTS.md, CLAUDE.md, README.md, SPEC.md
 ├── apps/
 │   ├── server/              # drizzle/ (generated migrations), drizzle.config.ts
-│   │   └── src/             # main.ts (composition root), config/, platform/ (db, HTTP/oRPC), modules/<feature>/
+│   │   └── src/             # main.ts (composition root), cli/ (admin commands), config/, platform/ (db, HTTP/oRPC), modules/<feature>/, testing/ (whole-app test helpers)
 │   └── web/src/             # React PWA: app/ (routing, layout, theme.css), features/<feature>/, shared/ (UI components, API client, hooks)
 ├── packages/
 │   ├── contracts/           # Zod schemas and the oRPC API contract (single source of truth for data shapes)
@@ -143,6 +143,7 @@ Other agents: follow everything in `.claude/rules/` and the `permissions.deny` a
 - Build: `pnpm build` (builds the web app; the server runs its TypeScript directly)
 - Deploy: `deploy/deploy.sh` (not written yet; ask first, see below)
 - Database: `pnpm db:generate` (create a migration from schema changes), `pnpm db:migrate` (apply migrations)
+- Users: `pnpm user:create`, `pnpm user:set-password` (prompt for details; change the database in `DATABASE_PATH`)
 
 ## Working Rules (Three Tiers)
 
@@ -173,8 +174,9 @@ Other agents: follow everything in `.claude/rules/` and the `permissions.deny` a
   folders' owners or permissions (`sysadminctl`, `dscl`, `chown`, `chmod`).
   Enforced in Claude Code via `permissions.ask`.
 - Database commands that change data or schema (`pnpm db:migrate`,
-  `pnpm db:generate`, any reset or seed script, and anything run against the
-  `DATABASE_PATH` file); see `.claude/rules/database-commands.md`.
+  `pnpm db:generate`, `pnpm user:create`, `pnpm user:set-password`, any reset
+  or seed script, and anything run against the `DATABASE_PATH` file); see
+  `.claude/rules/database-commands.md`.
 - Any call that loads, unloads or switches models on the shared LLM server;
   other people use it for chat (`SPEC.md` §4.1).
 - Anything that changes the running production SnapTrack server on the Mac

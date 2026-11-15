@@ -2,12 +2,20 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import fastifyStatic from "@fastify/static";
 import type { Router } from "@orpc/server";
-import type { Contract } from "@snaptrack/contracts";
 import { RPCHandler } from "@orpc/server/fastify";
+import { ResponseHeadersPlugin, SimpleCsrfProtectionHandlerPlugin } from "@orpc/server/plugins";
+import type { Contract, PublicUser } from "@snaptrack/contracts";
 import Fastify, { type FastifyInstance } from "fastify";
+import type { RpcContext } from "./rpc.ts";
+
+/** Resolves the signed-in user from a request's cookies, and a renewed cookie if one is due. */
+export type Authenticate = (
+  cookieHeader: string | undefined,
+) => { user: PublicUser; setCookie?: string } | null;
 
 export interface HttpServerOptions {
-  router: Router<Contract, object>;
+  router: Router<Contract, RpcContext>;
+  authenticate: Authenticate;
   logLevel: string;
   /** The built web app. Absent in development, where Vite serves it. */
   webDistDir: string | undefined;
@@ -23,7 +31,10 @@ export function createHttpServer(options: HttpServerOptions): FastifyInstance {
 
   app.get("/healthz", () => ({ status: "ok" }));
 
-  const rpcHandler = new RPCHandler(options.router);
+  const rpcHandler = new RPCHandler(options.router, {
+    // Every call must carry a header a cross-site form can't send (docs/feature-plans/accounts-plan.md).
+    plugins: [new ResponseHeadersPlugin(), new SimpleCsrfProtectionHandlerPlugin()],
+  });
   void app.register((rpc, _opts, done) => {
     // oRPC reads request bodies itself (including file uploads), so Fastify must not parse them.
     rpc.removeAllContentTypeParsers();
@@ -31,7 +42,12 @@ export function createHttpServer(options: HttpServerOptions): FastifyInstance {
       parsed(null, undefined);
     });
     rpc.all("/rpc/*", async (request, reply) => {
-      const { matched } = await rpcHandler.handle(request, reply, { prefix: "/rpc", context: {} });
+      const cookieHeader = request.headers.cookie;
+      const session = options.authenticate(cookieHeader);
+      // Set on the raw response so it survives oRPC writing its own headers.
+      if (session?.setCookie !== undefined) reply.raw.setHeader("set-cookie", session.setCookie);
+      const context: RpcContext = { user: session?.user ?? null, cookieHeader };
+      const { matched } = await rpcHandler.handle(request, reply, { prefix: "/rpc", context });
       if (!matched) await reply.status(404).send({ error: "Not found" });
     });
     done();

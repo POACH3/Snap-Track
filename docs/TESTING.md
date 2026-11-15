@@ -20,15 +20,27 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 | `apps/server/src/platform/db/sqlite-transaction.test.ts` | `Transaction.run`: commits, rolls back on throw, nested savepoints, refuses async `fn` (type and run time) |
 | `apps/server/src/platform/db/migrations.test.ts` | Migrations apply to a fresh database, are idempotent, pending count; foreign keys on |
 | `apps/server/src/platform/http/create-http-server.test.ts` | `/healthz`, oRPC under `/rpc`, 404 for unknown procedures, a request ID per request |
+| `apps/server/src/modules/auth/domain/auth-rules.test.ts` | Username and password rules, session lifetime and renewal, login throttling |
+| `apps/server/src/modules/auth/application/auth-service.test.ts` | Login, authenticate, logout, create user, set password (real SQLite, fake hasher and clock) |
+| `apps/server/src/modules/auth/adapters/sqlite-repositories.test.ts` | Users and sessions tables: unique usernames, exact expiry, expired cleanup, cascade on user delete |
+| `apps/server/src/modules/auth/adapters/session-cookie.test.ts` | Cookie name and attributes over HTTPS and plain http; reading it back |
+| `apps/server/src/modules/auth/adapters/rpc.test.ts` | Login, `me`, renewal, expiry and logout over HTTP; error codes; cookie flags |
+| `apps/server/src/modules/auth/testing/password-hasher.contract.test.ts` | `PasswordHasher` contract, run against Argon2 and the fake |
+| `apps/server/src/testing/api-protection.test.ts` | Walks the whole contract: every non-public procedure refuses requests without a valid session |
 | `tooling/boundaries.test.ts` | Each boundary rule fires on its deliberate violation in `tooling/boundary-fixtures/` |
 
 ## Test helpers
 
+- `apps/server/src/testing/create-test-app.ts`: `createTestApp()`, the whole server wired
+  like `main.ts` on an in-memory database with a fake clock and fast hasher; `CSRF_HEADER`.
+- `apps/server/src/modules/auth/testing/fake-password-hasher.ts`: instant stand-in for Argon2.
+- `@snaptrack/core/testing`: `FakeClock`.
 - `apps/server/src/platform/db/testing/test-database.ts`: `createTestDatabase()`, a
   fresh in-memory SQLite database with every migration applied. One per test.
 
 ## Not covered
 
-- Web client components (no component tests until there is real UI).
+- Web client components and the login screen (no component tests yet; covered by Playwright from Stage 2).
+- `pnpm user:create` / `user:set-password` prompts: checked by hand with piped input against a scratch database.
 - Host setup, firewall, Tailscale and deploy (Stage 0 steps 9–11): manual checks,
   to be listed in `deploy/README.md`.

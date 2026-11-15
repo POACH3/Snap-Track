@@ -6,7 +6,9 @@
     "dev": "cd ../.. && node --watch --env-file=.env apps/server/src/main.ts",
     "typecheck": "tsc --noEmit -p .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "cd ../.. && node --env-file-if-exists=.env apps/server/src/platform/db/migrate-cli.ts"
+    "db:migrate": "cd ../.. && node --env-file-if-exists=.env apps/server/src/platform/db/migrate-cli.ts",
+    "user:create": "cd ../.. && node --env-file-if-exists=.env apps/server/src/cli/users.ts create",
+    "user:set-password": "cd ../.. && node --env-file-if-exists=.env apps/server/src/cli/users.ts set-password"
   },
   "dependencies": {
     "@fastify/static": "10.1.10",

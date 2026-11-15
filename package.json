@@ -18,7 +18,9 @@
     "boundaries": "depcruise apps packages",
     "test": "vitest run",
     "db:generate": "pnpm --filter @snaptrack/server db:generate",
-    "db:migrate": "pnpm --filter @snaptrack/server db:migrate"
+    "db:migrate": "pnpm --filter @snaptrack/server db:migrate",
+    "user:create": "pnpm --filter @snaptrack/server user:create",
+    "user:set-password": "pnpm --filter @snaptrack/server user:set-password"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

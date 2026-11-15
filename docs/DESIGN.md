@@ -305,4 +305,4 @@ For a short notification after an action: an error, or a success.
 *Records places the code already breaks this guide, so they are fixed on purpose rather than copied.*
 
 <!-- One bullet per mismatch: date, what differs, where (file and class or component). -->
-- None yet (no client code exists as of 2026-11-14).
+- 2026-11-15: Login errors that follow the **Log in** action ("Too many failed attempts…" and "Can't reach SnapTrack…") show as a red message under the form, not as an error toast ("Feedback", "Toasts"), because no toast component exists yet. The wrong-password message is a field error on the password field, which does follow the guide. Where: `apps/web/src/features/auth/LoginScreen.tsx` (`formMessage`, `.formError` in `LoginScreen.module.css`). Also the "can't reach" message on the signed-in shell in `apps/web/src/app/App.tsx`. Fix when the toast component is built (Stage 2).

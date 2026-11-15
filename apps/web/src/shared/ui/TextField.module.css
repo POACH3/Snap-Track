@@ -1,0 +1,42 @@
+/* Text field (docs/DESIGN.md: "Text field / area", "Form labels", "Form field gap"). */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-body);
+}
+
+.input {
+  min-height: 44px;
+  padding: 0 14px;
+  background: var(--bg-page);
+  color: var(--text-heading);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  font: inherit;
+  transition: border-color var(--transition);
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.input:hover {
+  border-color: var(--border-hover);
+}
+
+.invalid,
+.invalid:hover {
+  border-color: var(--danger);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
