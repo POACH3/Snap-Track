@@ -94,7 +94,7 @@ Expenses without a paper receipt can be entered by hand, as a quick entry (store
 | Server | Node + Fastify, with Zod schemas shared between client and server |
 | Database | SQLite with Drizzle ORM and migrations |
 | Extraction | A vision model on the existing LLM server (oMLX), chosen by an evaluation in Stage 3 |
-| Packaging | One Docker container for the Fin Snap server; the LLM server runs natively on the same Mac |
+| Hosting | Runs natively on the Mac as a macOS service under its own account, with no Docker; the LLM server runs the same way |
 | Network | Tailscale, for private access and HTTPS |
 | Quality | Vitest, Playwright, ESLint, Prettier and dependency-cruiser, all run by one `pnpm check` command |
 
@@ -108,7 +108,7 @@ Each stage ends in something that runs and is tested.
 
 | Stage | Delivers |
 |---|---|
-| 0 | Scaffold, quality checks, Docker, HTTPS over Tailscale, installable placeholder app |
+| 0 | Scaffold, quality checks, native macOS service, HTTPS over Tailscale, installable placeholder app |
 | 1 | Accounts and login |
 | 2 | Capture and upload (online) |
 | 3 | Extraction with the vision model, plus a model evaluation |

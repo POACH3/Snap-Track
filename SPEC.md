@@ -84,7 +84,7 @@ Every feature works on both, but each screen is designed first for the device it
 These rules apply to every line of code. When one conflicts with speed, the rule wins. When two conflict, **simplicity** wins: the simplest design that keeps components loosely coupled.
 
 ### 3.1 Architecture rules
-1. **Ports and adapters.** Business logic never touches I/O directly. It depends on small interfaces ("ports") such as `ReceiptRepository`, `ReceiptExtractor`, `ModelHost`, `FileStore`, `JobQueue`, `Clock`. Concrete implementations ("adapters": SQLite, the LLM server, the file system) plug in from the outside.
+1. **Ports and adapters.** Business logic never touches I/O directly. It depends on small interfaces ("ports") such as `ReceiptRepository`, `ReceiptExtractor`, `FileStore`, `JobQueue`, `Clock`. Concrete implementations ("adapters": SQLite, the LLM server, the file system) plug in from the outside.
 2. **Dependencies point inward.** `domain` ← `application` ← `adapters`. Domain code imports nothing from the other layers or from any framework. Fastify, Drizzle, and HTTP clients appear only in adapters.
 3. **Modules by feature, not by layer.** Code is grouped by what it does (receipts, catalog, extraction...). Each module exposes a single public entry point (`index.ts`). Other modules import only from that entry point, never from a module's internals.
 4. **Each module owns its tables.** No module reads or writes another module's tables. The two exceptions are the `analytics` and `export` modules, which have read-only access to everything for reporting and export (see §4.3).
@@ -93,11 +93,11 @@ These rules apply to every line of code. When one conflicts with speed, the rule
 
 ### 3.2 No repeated code
 1. **One source of truth for data shapes.** Zod schemas in `packages/contracts` define every API request and response, the extraction output, and form validation. TypeScript types are inferred from them, never hand-written twice. Server and client both import them.
-2. **Shared primitives live once.** Money (integer cents, formatting, allocation), dates, IDs, and the `Result`/error types live in `packages/core` and are used everywhere.
+2. **Shared primitives live once.** Money (integer cents, formatting, allocation), quantities (integer thousandths, parsing and formatting), dates, IDs, and the `Result`/error types live in `packages/core` and are used everywhere.
 3. **Rule of three.** Duplication is removed when a pattern appears the third time, not before. No speculative abstractions.
 
 ### 3.3 Simplicity
-- Fewest moving parts that meet the requirements: one server process, one database file, one container for the app.
+- Fewest moving parts that meet the requirements: one server process, one database file, one service for the app.
 - No feature flags, plugin systems, or configuration options unless a requirement needs them.
 - Prefer plain functions over classes for domain logic. Use classes only for adapters that hold resources (a DB connection, an HTTP client).
 - Small files with one purpose. Names say what something does; comments say *why*, not what.
@@ -133,7 +133,7 @@ Every fake adapter lives next to its port and is reused by all tests (no per-tes
 ```
  Phone (browser / installed PWA)                 Home server
 ┌───────────────────────────────┐   HTTPS via   ┌──────────────────────────────┐    ┌──────────────────────┐
-│ React PWA                     │   Tailscale   │ Fin Snap server (Docker)     │    │ LLM server (existing,│
+│ React PWA                     │   Tailscale   │ Fin Snap server (native)     │    │ LLM server (existing,│
 │  - camera capture             │ ────────────► │  - auth / sessions           │    │ shared; native)      │
 │  - image resize/compress      │               │  - receipt upload            │    │  relay → oMLX        │
 │  - IndexedDB upload queue     │ ◄──────────── │  - extraction job runner ────┼──► │  one model loaded    │
@@ -146,13 +146,11 @@ Every fake adapter lives next to its port and is reused by all tests (no per-tes
 ### 4.1 Components
 - **Client (PWA).** Single-page React app, installable to the home screen, responsive from phone to desktop (§1, Devices). Handles capture, offline queueing, review, and visualization. Contains no business rules beyond input validation. Served by the Fin Snap server, so there is one origin.
 - **Fin Snap server.** Owns all data and business logic: auth, upload, extraction pipeline, normalization, categorization, analytics.
-- **LLM server (existing, shared).** The household's private LLM server already runs on the same Mac (the separate LLM-Server project: a relay in front of oMLX, which runs MLX models natively on the GPU). It serves chat models to other people and holds **one model in memory at a time**; switching models takes roughly 8–13 seconds. Fin Snap does not install or own it. Fin Snap reaches it over its network port and uses it through two ports in code:
-  - `ModelHost` — check the server's state (free / in use / reserved / offline), see which model is loaded, and switch models.
-  - `ReceiptExtractor` — send a receipt image to the loaded vision model and get structured data back.
+- **LLM server (existing, shared).** The household's private LLM server already runs on the same Mac (the separate LLM-Server project, owned by the developer: a relay in front of oMLX, which runs MLX models natively on the GPU). It serves chat models to other people and holds **one model in memory at a time**, so larger models fit and the machine keeps memory free for other work; switching models takes roughly 8–13 seconds. Fin Snap does not install or own it. Fin Snap reaches it over its network port through one port in code, `ReceiptExtractor`: send a receipt image to the vision model and get structured data back.
 
-  Fin Snap switches the server to the vision model for a batch of receipts, then switches it back to whatever was loaded before (§6.3.1).
+  The relay, not Fin Snap, decides when to switch to the vision model and when to switch back. Fin Snap's requests are low priority: they wait while anyone is chatting and may be interrupted by a chat (§6.3.1).
 - **Job runner.** In-process background queue behind the `JobQueue` port. Jobs are persisted in the database so a restart resumes them.
-- **Storage.** SQLite database file plus an image directory on a Docker volume, each behind its own port.
+- **Storage.** SQLite database file plus an image directory in the Fin Snap account's data folder (§4.7), each behind its own port.
 - **Network.** Tailscale provides private access from phones anywhere and a valid HTTPS certificate (required for PWA install, service workers, and camera access).
 
 ### 4.2 Repository layout
@@ -182,7 +180,7 @@ fin-snap/
 │   ├── contracts/                       # Zod schemas: API, extraction output (single source of truth)
 │   └── core/                            # money, dates, ids, Result/error types
 ├── docs/adr/                            # architecture decision records
-└── docker-compose.yml
+└── deploy/                              # LaunchDaemon definitions, deploy script, firewall rules, setup notes (§4.7)
 ```
 
 **Inside every server module:**
@@ -206,8 +204,8 @@ modules/receipts/
 | Module | Owns | Depends on |
 |---|---|---|
 | `auth` | users, sessions, login | — |
-| `receipts` | receipts, line items, images, receipt lifecycle, consistency checks, image retention cleanup | `catalog` (to resolve stores/items/categories), `settings` (retention period) |
-| `extraction` | extraction jobs, model leases, switching the LLM server's model and restoring it, calling the model, validating model output | `receipts` (to save results), `catalog` (the category hierarchy, for suggestions) |
+| `receipts` | receipts, line items, images, receipt lifecycle, consistency checks, image retention cleanup, updating its own rows when catalog entries are merged | `catalog` (to resolve stores/items/categories), `settings` (retention period) |
+| `extraction` | extraction jobs, sending low-priority requests to the LLM server's relay, handling its busy / interrupted replies, validating model output | `receipts` (to save results), `catalog` (the category hierarchy, for suggestions) |
 | `catalog` | stores (companies), items, categories, store and item identifiers, store identification, matching and learning | — |
 | `settings` | household settings: reading, validating, and changing them | — |
 | `imports` | import batches, retailer format definitions, parsing and mapping CSV rows | `receipts` (to create receipts and line items through its public interface), `catalog` (to resolve the retailer's store) |
@@ -215,6 +213,8 @@ modules/receipts/
 | `export` | format writers (nothing in the database) | Reads all tables for export; reuses `analytics` queries for view exports; writes none |
 
 Modules communicate only through each other's `index.ts`. When the `receipts` module confirms a receipt, it calls `catalog.learnFromConfirmedReceipt(...)` through that public interface; it never writes identifier tables itself. Circular dependencies between modules are not allowed (enforced by the boundary check).
+
+**Merges.** When two stores, two items, or two hierarchy entries are merged, `catalog` merges its own tables (identifiers, item categories and tags, store defaults, child entries). Other modules' rows that point at the merged-away entry are updated by the module that owns them, never by `catalog`. Because `receipts` depends on `catalog`, `catalog` can't call `receipts` directly; instead `catalog` defines a port, `CatalogMergeListener` (`storesMerged(from, to)`, `itemsMerged(from, to)`, `categoriesMerged(from, to)`), and `receipts` supplies the adapter that updates its own rows (`receipts.store_id`, `line_items.item_id`, `line_items.line_category_id`, `line_items.suggested_category_id`). The composition root wires them together. The catalog changes and every listener's changes run in one database transaction, so a merge either completes everywhere or not at all.
 
 ### 4.4 Tech stack
 | Layer | Choice | Why |
@@ -230,11 +230,11 @@ Modules communicate only through each other's `index.ts`. When the `receipts` mo
 | Charts | TBD in Stage 6 | Pick when the breakdown views are designed. |
 | Tests | Vitest, Playwright | |
 | Quality tooling | ESLint, Prettier, dependency-cruiser | See §3.6. |
-| Packaging | Docker Compose | Fin Snap server in one container (ARM64 image). The LLM server runs natively on the host and is managed by its own project (§4.6). |
+| Hosting | Native macOS service (LaunchDaemon), no Docker | Runs directly on the Mac under its own standard account: data and backups are plain files, no virtual machine holds memory the models could use, and it starts at boot. The LLM server runs the same way, managed by its own project. See §4.7. |
 
 ### 4.5 Configuration
 Read from `.env` (checked-in `.env.example`), validated at startup:
-- `LLM_SERVER_URL` — the LLM server relay's address and port (from inside the container, e.g. `http://host.docker.internal:<relay port>`)
+- `LLM_SERVER_URL` — the LLM server relay's address and port (e.g. `http://127.0.0.1:<relay port>`)
 - `LLM_SERVER_API_KEY` — Fin Snap's own key for the LLM server, so its usage is recorded under its own name
 - `EXTRACTION_MODEL` — the vision model's name as the LLM server knows it
 - `EXTRACTION_TIMEOUT_MS`
@@ -251,12 +251,47 @@ Read from `.env` (checked-in `.env.example`), validated at startup:
 | Storage | 1 TB SSD |
 
 What this means for the design:
-- **The LLM server already runs natively** on this Mac (oMLX uses the GPU through Metal). Docker on macOS cannot reach the GPU, so only the Fin Snap server is containerized. It reaches the LLM server at `host.docker.internal`.
+- **Both services run natively** on this Mac (oMLX uses the GPU through Metal, which Docker on macOS cannot reach). Fin Snap reaches the LLM server at `127.0.0.1`. Hosting and isolation are in §4.7.
 - **Model size budget:** the LLM server loads one model at a time, so the vision model gets the GPU memory the chat model was using. Vision models up to roughly 32B parameters fit comfortably at 4-bit (about 20–25 GB; the current chat models use 19–26 GB). Larger models (~70B) technically fit but are likely too slow to be worth it; the Stage 3 evaluation decides.
 - **Speed:** expect seconds per receipt for small models and tens of seconds for ~32B models. Extraction is asynchronous, so this never blocks capture.
-- **Always on:** the Mac must not sleep (Energy settings: prevent automatic sleep; start after power failure). Docker and Tailscale start at login. The LLM server is started by its own scripts; while it is stopped, extraction jobs simply wait.
+- **Always on:** the Mac must not sleep (Energy settings: prevent automatic sleep; start after power failure). Fin Snap, the LLM server, and Tailscale start at boot with no one logged in (§4.7); FileVault is off so a restart needs no password. While the LLM server is stopped, extraction jobs simply wait.
 - **Storage:** at ~0.5 MB per resized receipt image, 1 TB is effectively unlimited even if images are kept forever. Image retention (§6.8) is a privacy and tidiness choice, not a disk-space need.
 - **Backups:** the nightly backup (§10) can target an external drive, and can also be covered by Time Machine.
+
+### 4.7 Hosting and isolation
+Fin Snap runs natively on the Mac, not in Docker. Its data stays in plain files (simple backups and restores), no virtual machine holds memory the models could use, and it starts at boot. Separation comes from macOS accounts instead of a container.
+
+**Accounts**
+- Each service has its own **standard (non-admin) macOS account**: one for Fin Snap (e.g. `finsnap`), one for the LLM server. Neither can install software, change system settings, or read the other's files. They talk only over `localhost`.
+- The developer's own admin account does setup, restarts, and fixes, but never runs Fin Snap or installs its packages.
+- No one logs in to the service accounts day to day.
+
+**Files and permissions**
+- Fin Snap's code, data (database, images, imported files, backups), and `.env` live in folders owned by the Fin Snap account that only it can open: `chmod 700` on folders, `600` on `.env`.
+- macOS home folders are partly visible to other accounts by default, so this is checked with `ls -le` after setup, not assumed.
+
+**Starting at boot**
+- Fin Snap runs as a **LaunchDaemon** (in `/Library/LaunchDaemons/`, with `UserName` set to the Fin Snap account and `KeepAlive` on), so it starts at boot with no one logged in and restarts if it crashes. A LaunchAgent starts only at login, so it is not used.
+- The LLM server runs the same way under its own account (set up in the LLM-Server project). Whether oMLX gets the GPU when started this way, with no one logged in, is tested before relying on it (§12).
+- Tailscale must also connect at boot with no one logged in; checked in Stage 0 (§12).
+- **FileVault is off.** With it on, the Mac stops at the unlock screen after a power cut and nothing starts until someone types a password. The trade-off is that someone who takes the Mac can read its disk (§13); backup drives are encrypted to limit this (§10).
+
+**Supply-chain protection** (a bad npm package is the most likely threat)
+- **Install scripts are blocked.** pnpm (version 10 or later) runs no dependency install scripts except those named in `pnpm.onlyBuiltDependencies` in `package.json` (e.g. `better-sqlite3`, which needs one for its native binary). Adding a package to that list needs the developer's approval, like adding any dependency.
+- **Installs use the lockfile** (`pnpm install --frozen-lockfile`) and run as the Fin Snap account, never as an admin.
+- **Outgoing internet is blocked for the Fin Snap account.** It may reach only `localhost` (the LLM relay) and Tailscale; everything else is refused, so even compromised code cannot send data out of the home network. During a deploy, the package registry and the code host are allowed for the install step only, then blocked again. The tool that enforces this (macOS's built-in `pf` firewall with per-user rules, or Little Snitch) is chosen in Stage 0 (§12). The LLM server account gets the same rule in its own project.
+
+**Runtime**
+- The Node version is pinned in the repo (`.node-version`, read by `mise`, plus `engines` in `package.json`), and the service runs that exact version.
+- System libraries Fin Snap needs (e.g. for HEIC conversion, §12) are installed with Homebrew from the admin account and listed in `deploy/` setup notes.
+
+**Network**
+- Fin Snap listens only on `127.0.0.1`. `tailscale serve` provides HTTPS on the Tailscale address and forwards to it. Nothing listens on the local network or the internet.
+
+**Production and development**
+- **Production:** the `fin-snap` LaunchDaemon, with its own data folder and port.
+- **Development** on the Mac Studio, if used: a second LaunchDaemon (`fin-snap-dev`) with its own data folder, database, image folder, port, and Tailscale HTTPS port. It never shares files with production. Day-to-day development runs `pnpm dev` on the developer's own machine.
+- **Deploy** is one script (`deploy/deploy.sh`): fetch the code, install with the lockfile (registry allowed for this step only), build, run migrations (with the developer's go-ahead), and restart the daemon. Restarting a LaunchDaemon needs admin rights, so that step runs from the admin account.
 
 ---
 
@@ -289,6 +324,7 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
   | `address` | "123 Main St, Springfield IL 62701" | standardized street + ZIP |
   | `logo_text` | stylized logo text read by the model | same as `name` |
 - Store numbers are kept on the receipt as evidence but are not identifiers on their own, since different companies reuse the same numbers.
+- Addresses are supporting identifiers: they back up a match but never make one alone, since several companies can share one address (§6.4).
 
 **`categories`** (catalog) — the classification hierarchy, four levels deep. One table holds every level.
 - `id`, `name`, `level` (1–4), `parent_id`, `color`, `sort_order`, `archived` (archived entries keep their history)
@@ -308,13 +344,14 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 
 **Classification rules.** Enforced by shared domain functions, so they live in one place:
 - **Each purchase (line) is assigned to exactly one entry in the hierarchy,** at the most specific level known (e.g. an L3 class, or just an L1 category if nothing finer applies). It belongs to that entry and every entry above it. A line with no category yet counts as **Unclassified**.
-- **Where a line's category comes from**, in order of precedence (first one that applies wins; one shared domain function decides):
+- **Where a line's category comes from**, in order of precedence (first one that applies wins; worked out when the line is read, never stored; see "One rule, two forms" below):
   1. **This purchase:** a category the user set on this line.
   2. **This item:** a category the user set for the item (every purchase of it, at any store).
   3. **This store:** the store's default category, set by the user ("what I usually buy here").
   4. **Nothing:** the line is Unclassified.
 - **Guesses are never applied.** The software's guess at a line's category (from the model, or later from learned patterns) is only ever a suggestion, and only shown when the line would otherwise be Unclassified. When a user-set category applies at any of levels 1–3, the guess stays silent: it is stored (for measuring accuracy) but not shown. A guess takes effect only when a user accepts it, which makes it a user-set category.
-- **Lines follow their source.** When a store's default or an item's category changes, every line that took its category from it updates too. Lines with their own user-set category (level 1) never change.
+- **Lines follow their source.** A line's category is worked out when it is read, never copied onto the line. So when a store's default or an item's category changes, every line without a category of its own shows the new one at once, with nothing rewritten. Lines with their own user-set category (level 1) never change.
+- **One rule, two forms, kept in agreement.** The precedence rule is a pure domain function in `catalog` (`effectiveCategory`, exported through its `index.ts`), used wherever single receipts are shown (review, receipt view). Analytics needs the same rule inside SQL, so the `analytics` module defines it once as a database view (`line_categories`: each line's category and its source, via `COALESCE(line, item, store default)`). One test runs both over the same cases (each precedence level, plus Unclassified) and fails if they disagree.
 - **Tags follow the same principle.** A line's tags are the tags the user set on its item plus those set on the line. Guessed tags are only suggestions until the user accepts them.
 - **Hierarchy breakdowns never double count.** At any level, every purchase falls in exactly one entry, so a breakdown adds up to its parent's total (or total spending, at L1). Purchases assigned higher up show as "<parent>, unspecified" so the children still add up to the parent.
 - **Free tags can overlap anything.** A tagged purchase still has its one place in the hierarchy, and may carry several tags.
@@ -382,10 +419,9 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 - `kind`: `item` or `fee` (bag fee, bottle deposit, shipping, service charge). Fees count toward store and category totals but are left out of item breakdowns and price tracking.
 - `raw_name` (exactly as printed), `item_code` (UPC/SKU if printed)
 - `item_id` (null until matched)
-- `category_id` — the line's one place in the hierarchy, at any level L1–L4; null means Unclassified
-- `category_source` — `line` (user set it on this line), `item`, or `store`; null when Unclassified. Used to keep lines in step with their source (see Classification rules).
+- `line_category_id` — a category the user set on this line only (e.g. "this purchase only", **Set all lines**, or a quick manual entry), at any level L1–L4; null otherwise. The line's actual category and where it came from (`line`, `item`, `store`, or Unclassified) are never stored; they are worked out when read (see Classification rules).
 - `suggested_item_name`, `suggested_category_id`, `suggested_tag_ids` (the software's guesses; never applied on their own; kept for suggestions and for measuring accuracy)
-- `quantity` (decimal), `unit` (`each`, `lb`, `oz`, `kg`, `g`, `gal`, `l`, `ml`, `fl_oz`; default `each`), `unit_price_cents` (per that unit)
+- `quantity_milli` (integer thousandths of the unit, so it is exact: 2.31 lb is stored as 2310, and 1 each as 1000), `unit` (`each`, `lb`, `oz`, `kg`, `g`, `gal`, `l`, `ml`, `fl_oz`; default `each`), `unit_price_cents` (per that unit)
 - `line_total_cents` — the amount **actually charged** for the line, after any item discount.
 - `discount_cents` — savings on this line, **already included** in the line total (coupons, markdowns, member prices). When a receipt prints a discount on its own line, it is attached to the item it applies to, not stored as a separate line.
 - Regular price is derived, not stored: `line_total + discount`. Price tracking uses both (§7).
@@ -399,10 +435,7 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 **`extraction_jobs`** (extraction)
 - `id`, `receipt_id`, `status` (`pending`, `running`, `done`, `failed`), `attempts`, `last_error`, `next_attempt_at`
 - `model`, `raw_output` (model's response, kept for debugging and re-processing), `completed_at`
-
-**`model_leases`** (extraction) — a record of each time Fin Snap switched the LLM server's model, so it can always switch it back.
-- `id`, `previous_model` (null if no model was loaded), `vision_model`, `started_at`, `restored_at` (null while the lease is open), `restore_outcome` (`restored`, `left_alone` — someone else changed the model meanwhile, or `unloaded`)
-- At most one open lease at a time.
+- `attempts` counts real failures only. A request the relay answers with busy or interrupted (§6.3.1) puts the job back to `pending` without adding an attempt.
 
 **`import_batches`** (imports) — one row per imported file.
 - `id`, `imported_by_user_id`, `format_id` (e.g. `amazon`), `file_name`, `file_sha256`, `rows_read`, `orders_created`, `orders_skipped_as_duplicates`, `rows_rejected`, `imported_at`
@@ -413,9 +446,9 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 - `unreviewed` and `confirmed` receipts both count toward breakdowns and trends. `uploaded`, `extracting`, and `review_required` receipts have no data yet and do not.
 - Which statuses count is decided by one shared domain function, used by every analytics query, so the rule lives in one place.
 - **Keep everything, require little.** Everything extracted is stored, even fields no screen shows yet; which fields are displayed is decided later, per screen. Only the **store** is required before a receipt can be confirmed (or a manual entry saved). Every other field may be null when the receipt doesn't print it or the model can't read it. Imported entries get their store from the retailer's format definition.
-- Deleting a store or item is a **merge**: its identifiers and line items move to another one, never orphaned.
+- Deleting a store or item is a **merge**: its identifiers and line items move to another one, never orphaned. Each module moves its own rows (§4.3, Merges).
 - Archiving a hierarchy entry hides it (and everything below it) from pickers but keeps it on existing line items.
-- Deleting a hierarchy entry is a merge into another entry on the same level; its purchases and children move along.
+- Deleting a hierarchy entry is a merge into another entry on the same level; its purchases and children move along, each module moving its own rows (§4.3, Merges).
 
 ### Default L1 categories
 Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainment, Clothing, Kids, Pets, Gifts, Other. No default L2–L4 entries; users build those as needed.
@@ -442,7 +475,7 @@ Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainme
 
 ### 6.3 Extraction (server)
 1. Upload creates a `receipts` row (`uploaded`) and enqueues an extraction job.
-2. Jobs are processed in batches, with the vision model loaded on the LLM server (§6.3.1). For each receipt, the job runner passes the image to the `ReceiptExtractor` port. The production adapter sends the image (as a base64 data URI) and a prompt to the LLM server's OpenAI-compatible chat endpoint and requests JSON matching the extraction schema from `packages/contracts` (using structured-output / JSON-schema mode if the server supports it).
+2. The job runner passes each receipt's image to the `ReceiptExtractor` port, which sends it to the LLM server's relay as a low-priority request; the relay decides when to run it (§6.3.1). The production adapter sends the image (as a base64 data URI) and a prompt to the LLM server's OpenAI-compatible chat endpoint and requests JSON matching the extraction schema from `packages/contracts` (using structured-output / JSON-schema mode if the server supports it).
 3. The output is validated against the same schema. Invalid output is retried once. If it is still invalid, or the job runs out of retries, the receipt is marked `review_required` and a person enters its data by hand (§6.5).
 4. **Consistency checks** (pure domain functions; warnings, not failures), shown to the reviewer:
    - Line totals ≈ subtotal (line totals are already net of item discounts).
@@ -454,31 +487,35 @@ Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainme
    - `quantity × unit_price` ≈ line total + line discount.
    - Date is not in the future and not unreasonably old.
 5. On success, normalization runs (§6.4) and the receipt moves to `unreviewed`. From this point it counts toward analytics.
-6. Transient errors (timeout, server error) retry with backoff, up to 5 attempts. Time spent waiting for the LLM server to be free or online does not count as an attempt; nothing is lost.
-7. Receipts in a batch are processed one at a time, so the LLM server is never asked to do more than one thing for Fin Snap at once.
+6. Transient errors (timeout, server error) retry with backoff, up to 5 attempts. Waiting for the LLM server (busy, interrupted by a chat, or offline) does not count as an attempt; nothing is lost.
+7. Receipts are sent one at a time, so the LLM server is never asked to do more than one thing for Fin Snap at once.
 
 #### 6.3.1 Sharing the LLM server
-The LLM server is shared with people chatting, and swapping models costs ~8–13 seconds each way. Fin Snap therefore takes the server only when nobody is using it, does as much as it can in one switch, and always puts things back.
+The LLM server is shared with people chatting, holds one model at a time, and swapping models costs ~8–13 seconds each way. Receipt reading is low priority: it can wait, and it can be interrupted, as long as every receipt is eventually read. **The LLM server's relay decides when to switch models; Fin Snap never loads, unloads, or switches a model itself.** The low-priority support below is built in the LLM-Server project (owned by the developer).
 
-**Batch flow** (an application-layer use case; all LLM server access goes through the `ModelHost` and `ReceiptExtractor` ports):
-1. **Wait for pending jobs.** Nothing happens while the extraction queue is empty.
-2. **Wait for the server to be free.** Ask `ModelHost` for the server's state. Start only when it is `free`. If it is `in_use`, `reserved`, or `offline`, check again later (every couple of minutes). Fin Snap never interrupts a chat or overrides the owner's reservation.
-3. **Open a lease.** Record the currently loaded model (or none) in `model_leases` **before** switching, so the previous model is known even if Fin Snap crashes.
-4. **Switch** the server to the vision model and wait until it is ready.
-5. **Process receipts** one at a time. Before each one, check the server's state again. If someone has started using it, finish the receipt in progress and stop. Also stop when the queue is empty or after about 10 minutes, so chat users are never shut out for long.
-6. **Restore.** If the vision model is still the one loaded, switch back to the previous model, or unload it if nothing was loaded before. If someone else changed the model in the meantime, leave their choice alone. Close the lease with the outcome.
-7. **Repeat** from step 1 if jobs remain.
+**What Fin Snap needs from the relay:**
+1. **Low-priority requests.** Fin Snap marks its extraction requests as low priority (a header or a separate endpoint, chosen in the LLM-Server project). Otherwise they are ordinary OpenAI-compatible chat requests naming the vision model.
+2. **The relay schedules them.** It runs a low-priority request only when no chat is running and the server isn't reserved, switching to the vision model first. While low-priority requests keep arriving and no one is chatting, it keeps the vision model loaded, so the swap is paid once per run of receipts, not per receipt. When they stop, or a chat arrives, it switches back to the model that was loaded before.
+3. **Chat comes first.** When a chat request arrives while a receipt is being read, the relay may cancel the receipt and reply **interrupted**.
+4. **A clear "not now".** If the relay won't run the request soon (server in use, reserved, or switching away), it replies **busy** with a suggested retry time, rather than holding the request indefinitely.
+5. **Distinct replies.** Busy and interrupted each have their own response (status code, and `Retry-After` for busy), separate from real errors, so Fin Snap can tell "try again later" from "this failed". The exact codes are set in the LLM-Server project and handled only in the `ReceiptExtractor` adapter.
 
-**Recovery:** on startup, if an open lease exists (Fin Snap stopped mid-batch), the restore step runs before anything else. A failed restore is retried and logged; it never leaves the lease silently open.
+**Fin Snap's side** (an application-layer use case; all LLM server access goes through the `ReceiptExtractor` port):
+1. Take the next pending extraction job whose `next_attempt_at` has passed (oldest first). Nothing happens while the queue is empty.
+2. Send it to the relay as a low-priority request.
+3. On success, validate and save the result (§6.3 steps 3–5).
+4. On **busy**, **interrupted**, or the LLM server being offline, put the job back to `pending` with `next_attempt_at` set (the relay's suggested retry time, or a couple of minutes). This does not count as an attempt: a job can be interrupted any number of times and is still completed eventually.
+5. On a real error (timeout, server error, invalid output), count an attempt and retry with backoff (§6.3 steps 3 and 6).
+6. Send one receipt at a time, waiting for each answer before sending the next.
 
-**Access through the relay, not oMLX directly**, with Fin Snap's own API key. This way the LLM server records Fin Snap's usage under its own name, its free / in use / reserved status already covers Fin Snap, and the owner's reservation is respected automatically.
+Fin Snap's job queue is the only record of what still needs reading; the relay holds nothing between requests. A restart of either side loses nothing: Fin Snap's jobs are persisted (§4.1), and an interrupted or unanswered request is simply sent again.
 
-**What the LLM server must provide.** The `ModelHost` adapter needs four operations: read the server's state, read the loaded model, load a model, and unload a model. How each maps onto the relay and oMLX is confirmed in Stage 3. If one is missing (for example, oMLX may switch models only implicitly, when a request names a different model), it is added to the LLM-Server project, which is a separate change made there. Fin Snap's code depends only on the port, so either way nothing outside the adapter changes.
+**Access through the relay, not oMLX directly**, with Fin Snap's own API key, so the LLM server records Fin Snap's usage under its own name.
 
 **Model choice.** Decided in Stage 3 with an evaluation harness (a script plus a fixture set of 20+ real household receipts with hand-checked correct answers). It scores each candidate on field accuracy and time per receipt. Candidates:
 - Vision-language models in MLX format that oMLX supports (oMLX runs vision models through `mlx-vlm`, so support depends on the architecture; check oMLX's release notes for each candidate and use a recent oMLX version): e.g. Qwen2.5-VL / Qwen3-VL, Gemma 4 (vision), Llama 3.2 Vision, from ~7B up to ~32B at 4-bit (the host's comfortable limit; §4.6).
-- Time per receipt is measured with the model already loaded; the swap cost is paid once per batch, not per receipt.
-- Two-step fallback, if no vision model is accurate enough on its own: an OCR model that oMLX also runs (e.g. DeepSeek-OCR, DOTS-OCR, GLM-OCR) reads the text, then a text model structures it into the extraction schema. This is a second `ReceiptExtractor` adapter; nothing else changes. Because it needs two models, it would cost an extra swap per batch, so it is only used if the evaluation shows a clear accuracy gain.
+- Time per receipt is measured with the model already loaded; the relay pays the swap cost once per run of receipts, not per receipt.
+- Two-step fallback, if no vision model is accurate enough on its own: an OCR model that oMLX also runs (e.g. DeepSeek-OCR, DOTS-OCR, GLM-OCR) reads the text, then a text model structures it into the extraction schema. This is a second `ReceiptExtractor` adapter; nothing else changes. Because it needs two models, the relay would have to switch between them, costing extra swaps, so it is only used if the evaluation shows a clear accuracy gain.
 
 The harness is kept so any future model can be compared against the same fixtures. It scores **store identification separately**: the share of receipts where the model extracted at least one usable identifier, and the accuracy of every store field.
 
@@ -516,15 +553,16 @@ Runs right after extraction. Because unreviewed receipts count toward analytics,
 1. **Store (company) identification.** One pure domain function, tested exhaustively, decides the store from the store evidence and the table of known identifiers:
    1. Normalize every extracted identifier (name, legal name, logo text, phone, website, address). Drop any value on the exclusion list (payment processors, point-of-sale vendors, card networks, generic phrases like "thank you").
    2. Look each one up in `store_identifiers`, ignoring any marked `ambiguous`.
-   3. **One company:** if every hit points to the same company, it is applied (`store_matched_by: identifier`) and the matching identifiers are recorded as evidence. One exact hit is enough; it can be a new location of a known company, since the company name or website still matches.
-   4. **Conflict:** if hits point to two or more companies, nothing is applied. The receipt is flagged **Store needs confirmation**, showing the candidates and which identifier points to each.
-   5. **Unknown:** if nothing hits, nothing is applied. The receipt is flagged **Store needs confirmation**, with suggestions: the model's brand guess and known companies with similar names.
+   3. **One company:** if every **strong** hit (name, legal name, logo text, phone, website) points to the same company, it is applied (`store_matched_by: identifier`) and the matching identifiers are recorded as evidence. One strong hit is enough; it can be a new location of a known company, since the company name or website still matches. Addresses are **supporting** identifiers only: an address hit for the same company is recorded as further evidence, and an address hit for a different company is ignored, since several companies can share one address (a café inside a supermarket, a food court, an airport).
+   4. **Conflict:** if strong hits point to two or more companies, nothing is applied. The receipt is flagged **Store needs confirmation**, showing the candidates and which identifier points to each.
+   5. **Address only:** if the only hits are addresses, nothing is applied. The receipt is flagged **Store needs confirmation**, with the address's company first among the suggestions.
+   6. **Unknown:** if nothing hits, nothing is applied. The receipt is flagged **Store needs confirmation**, with suggestions: the model's brand guess and known companies with similar names.
    - The model's brand guess, similar-name matches, and store numbers are **never applied automatically**; they only rank suggestions. This is what keeps automatic matches extremely accurate: a store is only ever applied because a person previously confirmed one of the identifiers on this receipt.
    - Until confirmed, an unidentified receipt still counts toward analytics, grouped under **Unidentified store**.
 2. **Items:** for each line, look up its barcode (any company), then its code, then its printed name (that company) in `item_identifiers`. On a hit, set `item_id`; the line then shows the item's name and carries its tags. On a miss:
    - Leave `item_id` empty and offer the closest existing item by fuzzy match on the review screen.
    - Store the model's suggested readable name, category (chosen from the current hierarchy at the most specific level it can justify), and tags (chosen from existing tags) as suggestions only.
-   - Then set each line's category by the precedence rule (§5, Classification rules): item category, else store default, else Unclassified. The model's category is never applied here.
+   - Nothing is written for the line's category. Once the item and store are known, the line shows the item's category, else the store default, else Unclassified, worked out when read (§5, Classification rules). The model's category is never applied.
    - Matching by code or printed name waits until the store is known, since those identifiers are per company. A full barcode can match before.
 3. Only exact identifier hits are applied automatically. Fuzzy matches are never applied without a person, so a wrong guess can't merge two different stores or items.
 4. In analytics, a line with no matched item is grouped under its printed name, labeled unmatched.
@@ -546,7 +584,7 @@ Runs right after extraction. Because unreviewed receipts count toward analytics,
   - Each line shows its category and where it came from (this purchase, this item, or the store's default).
   - Any line can be recategorized. The user chooses whether the new category is for **this purchase only** or for **this item** (every purchase of it).
   - **Set all lines:** one action assigns a category to every line on the receipt (as this-purchase categories).
-  - **Store default:** when a store has no default yet, the screen offers "What do you usually buy here?" The answer becomes the store's default and fills every line without an item or line category. The default can also be changed later from the store's detail screen.
+  - **Store default:** when a store has no default yet, the screen offers "What do you usually buy here?" The answer becomes the store's default and applies at once to every line without an item or line category. The default can also be changed later from the store's detail screen.
   - **Suggestions:** an Unclassified line shows the software's suggested category (and suggested tags) with **Accept** / **Dismiss**. Nothing is applied until accepted. Lines that already have a category from the user, the item, or the store show no suggestion.
 - Duplicates: flagged as **definite** when the store matches and either a transaction number matches, or the approval code and card last four match; flagged as **possible** when the store, date, time (if printed), and total match.
 - **Confirm** saves everything, sets `confirmed`, and triggers learning (below). Confirm is blocked until the store is set; every other field may be left empty.
@@ -568,6 +606,7 @@ On confirm (and whenever a confirmed receipt's store or items are edited), `rece
 **Stores — the user confirms a company once, and never again:**
 - Saves **every** identifier from the receipt's store evidence (name, legal name, logo text, phone, website, address) against the chosen company, not just the one that matched. A company confirmed once is then recognized by any of those details, at any location that shares one of them.
 - If an identifier is already saved for a **different** company, the user is asked before anything changes ("This phone number is saved for Target. Move it to Walmart?"). Identifiers are never silently moved.
+- **Shared addresses:** if an address is already saved for a different company, it is not moved. Both companies really are there, so it is marked `ambiguous` (a shared location) and the user is told ("This address is also saved for Target; it is now treated as a shared location").
 - **Correcting a wrong automatic match:** the identifiers that caused it are marked `ambiguous` (they stop being used for automatic matching), and the receipt's other identifiers are saved for the correct company. The same mistake can't happen twice.
 - Every store has an **Identifiers** list (in the store's detail screen) showing what it is recognized by, where each identifier can be removed or marked ambiguous by hand. Merging two stores combines their identifiers.
 
@@ -712,7 +751,7 @@ From Settings → **Export all data**. Produces one ZIP file:
 | `images/<receipt id>.jpg` | Receipt images still on file. Optional (a checkbox), since this is the large part. |
 | `README.txt` | What each file and column means. |
 
-**Not exported:** password hashes, sessions, and internal working records (extraction jobs, model leases). These are operational state, not household data.
+**Not exported:** password hashes, sessions, and internal working records (extraction jobs). These are operational state, not household data.
 
 ### 8.2 View export
 Every list, breakdown, and trend view has an **Export** button that downloads exactly what is on screen, with the current filters, as CSV (or any other supported format).
@@ -726,6 +765,7 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 - **CSV:** UTF-8 (with a byte-order mark, so Excel reads it correctly), a header row, standard quoting (RFC 4180).
 - **Dates:** ISO 8601 (`2026-11-14`, `2026-11-14T13:05`).
 - **Money:** decimal dollars in CSV and XLSX for readability (`12.34`); integer cents in JSON, so it is exact.
+- **Quantities:** decimal in CSV and XLSX (`2.31`); integer thousandths in JSON, so it is exact.
 - **Safety:** CSV/XLSX cells that begin with `=`, `+`, `-`, or `@` are escaped, so a store or item name can never run as a spreadsheet formula when opened.
 - **Delivery:** exports stream directly to the browser; at household scale no background job is needed.
 
@@ -733,9 +773,10 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 
 ## 9. Security and Privacy
 
-- **Network:** the Fin Snap server listens only on the Tailscale interface (or behind `tailscale serve`); the LLM server listens only on the Mac itself (per its own project). Neither is exposed to the internet. Fin Snap's LLM server API key lives in `.env` only.
+- **Network:** the Fin Snap server listens only on `127.0.0.1`, reached from household devices through `tailscale serve`; the LLM server listens only on the Mac itself (per its own project). Neither is exposed to the internet. Fin Snap's LLM server API key lives in `.env` only.
+- **Isolation:** Fin Snap runs under its own standard macOS account with private folders, blocked install scripts, and outgoing internet blocked (§4.7).
 - **Auth:** username and password per household member, hashed with Argon2. Login sets an HTTP-only, Secure, SameSite cookie session. No public sign-up; an admin command (or first-run setup) creates users.
-- **Secrets:** `.env` is git-ignored.
+- **Secrets:** `.env` is git-ignored and readable only by the Fin Snap account (`600`).
 - **Data leaving the network:** none.
 - **Image retention:** households can limit how long receipt images are kept (§6.8).
 - **On the phone:** queued images stay in IndexedDB only until uploaded. Logging out clears the queue after warning about any receipts not yet uploaded.
@@ -745,8 +786,10 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 ## 10. Backups
 
 - Everything lives in two places: the SQLite file and the image directory.
-- A nightly job uses SQLite's online backup to make a safe copy, copies new images alongside it, and keeps the last 14 nights.
-- Restore = stop the container, put the files back, start the container. Documented and tested once in Stage 5.
+- A nightly job uses SQLite's online backup to make a safe copy in the Fin Snap backup folder, copies new images alongside it, and keeps the last 14 nights. It can also copy them to an external drive.
+- Time Machine covers the backup folder. It may copy the live database file mid-write, so restores always use the nightly copies, never Time Machine's copy of the live file.
+- Backup drives (Time Machine and external) are encrypted, since the Mac's own disk is not (FileVault is off; §4.7).
+- Restore = stop the Fin Snap service, put the files back, start the service. Documented and tested once in Stage 5.
 
 ---
 
@@ -755,8 +798,8 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 Each stage ends in something that runs and is verified. A stage is done when its **Done when** items are tested, not just written, **and `pnpm check` passes**.
 
 ### Stage 0 — Scaffold and quality gates
-**Build:** monorepo with `apps/server`, `apps/web`, `packages/contracts`, `packages/core`; strict TypeScript, ESLint, Prettier, Vitest; dependency-cruiser rules for §3.1; `pnpm check`; config loader with validation; structured logging; Fastify serving the built React app; SQLite + Drizzle with a first migration; Dockerfile and `docker-compose.yml`; `.env.example`; first ADR recording this architecture; Tailscale HTTPS setup notes.
-**Done when:** `docker compose up` serves a placeholder page over HTTPS at the Tailscale address from a phone, it installs to the home screen, and a deliberate boundary violation (e.g. a domain file importing Fastify) makes `pnpm check` fail.
+**Build:** monorepo with `apps/server`, `apps/web`, `packages/contracts`, `packages/core`; strict TypeScript, ESLint, Prettier, Vitest; dependency-cruiser rules for §3.1; `pnpm check`; config loader with validation; structured logging; Fastify serving the built React app; SQLite + Drizzle with a first migration; `.env.example`; first ADR recording this architecture; hosting per §4.7: the Fin Snap account, private folders, LaunchDaemon, Node version pin, install-script allowlist, outgoing-internet block, `tailscale serve`, deploy script, and setup notes in `deploy/`.
+**Done when:** after a reboot with no one logged in, the Fin Snap LaunchDaemon serves a placeholder page over HTTPS at the Tailscale address from a phone, and it installs to the home screen; a deliberate boundary violation (e.g. a domain file importing Fastify) makes `pnpm check` fail; a dependency install script not on the allowlist does not run; an outgoing internet request from the Fin Snap account is refused while `localhost` still works; another standard account cannot read Fin Snap's data folder or `.env`.
 
 ### Stage 1 — Accounts
 **Build:** `auth` module (users, sessions, login/logout, route protection); admin command to create users.
@@ -767,13 +810,13 @@ Each stage ends in something that runs and is verified. A stage is done when its
 **Done when:** a photo taken on both an Android phone and an iPhone shows up in the list with the right person attached; three photos chosen together from an iPhone library become three receipts; a HEIC file dragged in on a desktop uploads and displays; uploading the same receipt twice creates one record.
 
 ### Stage 3 — Extraction
-**Build:** extraction schema in `contracts`; `extraction` module; `JobQueue` port with persisted SQLite adapter; `ModelHost` port with LLM-server adapter and fake; `ReceiptExtractor` port with LLM-server adapter and fake; model leases, batch flow, and startup recovery (§6.3.1); consistency checks; confirm how the LLM server exposes state, loaded model, load, and unload, and add anything missing in the LLM-Server project; vision model added to the LLM server.
+**Build:** extraction schema in `contracts`; `extraction` module; `JobQueue` port with persisted SQLite adapter; `ReceiptExtractor` port with LLM-server adapter and fake, including busy / interrupted replies; the extraction loop (§6.3.1); consistency checks; low-priority request support in the relay (built in the LLM-Server project, §6.3.1); vision model added to the LLM server.
 **Model evaluation:** build the evaluation harness and fixture set; compare candidate models (§6.3); record the choice in an ADR.
-**Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; an unreadable image ends up `review_required`; a Fin Snap restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. After a batch, the LLM server has the same model loaded as before it started. A batch does not start while the server is in use or reserved, and stops after the current receipt when someone starts chatting. Killing Fin Snap mid-batch and restarting it restores the previous model.
+**Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; an unreadable image ends up `review_required`; a Fin Snap restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. While the relay replies busy, jobs wait without using up attempts and complete once it is free. A receipt interrupted by a chat goes back to the queue and is completed later, and interruptions never count toward the 5-attempt limit. (That the relay switches back to the previous model, and puts chat ahead of receipts, is tested in the LLM-Server project.)
 
 ### Stage 4 — Review and log
 **Build:** `catalog` module (stores, items, categories with defaults, store and item identifiers, store identification, matching, learning, store detail screen with its Identifiers list); hierarchy editor (L1–L4: add, rename, move, archive, merge); hierarchy picker showing the full path (e.g. "Groceries › Frozen foods › Ice cream"); free tags; item naming and tagging from the review screen and an Items screen; side-by-side image/data component with zoom; review screen; receipt detail view (same component); manual entry with quick and full modes (same form component, §6.6); store/item pickers; confirm flow; duplicate warning.
-**Done when:** after a company is confirmed once, a second receipt from it (same or different location, sharing at least one identifier) is matched to it automatically, with its repeat items; a receipt whose identifiers point to two companies is flagged, not guessed; correcting a wrong automatic match stops the identifier that caused it from matching again; a receipt can't be confirmed without a store but can with any other field empty; after a user names an item, a later receipt from the same company with the same code but differently printed text shows the user's name; a tag added to an item appears on all its purchases, and a tag added to one purchase appears only there; with a store default of Groceries, every line from that store is Groceries and the model's differing guess is not shown; recategorizing one item "for this item" applies on its next purchase from any store, while "this purchase only" changes nothing else; an Unclassified line's suggestion has no effect until accepted; a confirmed receipt reopens with its image beside its data; a review-required receipt can be entered by hand and confirmed; a quick manual entry and a full manual entry are each saved as confirmed and appear in the receipts list labeled manual.
+**Done when:** after a company is confirmed once, a second receipt from it (same or different location, sharing at least one identifier) is matched to it automatically, with its repeat items; a receipt whose identifiers point to two companies is flagged, not guessed; a receipt that matches a known company only by address is flagged, not matched; correcting a wrong automatic match stops the identifier that caused it from matching again; a receipt can't be confirmed without a store but can with any other field empty; after a user names an item, a later receipt from the same company with the same code but differently printed text shows the user's name; a tag added to an item appears on all its purchases, and a tag added to one purchase appears only there; with a store default of Groceries, every line from that store is Groceries and the model's differing guess is not shown; recategorizing one item "for this item" applies on its next purchase from any store, while "this purchase only" changes nothing else; an Unclassified line's suggestion has no effect until accepted; a confirmed receipt reopens with its image beside its data; a review-required receipt can be entered by hand and confirmed; a quick manual entry and a full manual entry are each saved as confirmed and appear in the receipts list labeled manual; after merging two items, every line from both shows the kept item (and the same for merging two stores or two hierarchy entries); a merge that fails partway changes nothing.
 
 ### Stage 5 — Offline capture and sync  ← **first usable version (MVP)**
 **Build:** service worker app-shell caching; `UploadQueue` with IndexedDB adapter; sync on open/reconnect; Background Sync where supported; pending-count indicator; nightly backup job and a tested restore; `settings` module and Settings screen; both image retention settings and the nightly cleanup job; `export` module with full export (CSV, JSON, optional images).
@@ -806,15 +849,17 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | Question | When it must be decided |
 |---|---|
 | Which vision model (must run on oMLX). | Stage 3 |
-| How the relay / oMLX expose server state, loaded model, load, and unload, and what must be added to the LLM-Server project. | Stage 3 |
-| Docker runtime on macOS (Docker Desktop vs. OrbStack). | Stage 0 |
+| The relay's low-priority API: how a request is marked low priority, and the exact busy / interrupted replies (§6.3.1). Built in the LLM-Server project. | Stage 3 |
+| How to block outgoing internet for the service accounts (`pf` per-user rules or Little Snitch), and how to allow the package registry only during deploys. | Stage 0 |
+| Whether Tailscale connects at boot with no one logged in (the standalone app, or the `tailscaled` daemon). | Stage 0 |
+| Whether oMLX gets the GPU when run as a LaunchDaemon with no one logged in (tested in the LLM-Server project). | Before Stage 3 |
 | Chart library. | Stage 6 |
 | How to handle returns and refunds (negative receipts or line items?). | Stage 4 |
 | How to treat receipts split between people. (Several payment methods on one receipt are handled by `payments`.) | Stage 4 |
 | Whether and how recorded tax codes are interpreted (e.g. to spread tax only across the lines it applies to). | Stage 6 |
 | Spike threshold: is 1.5× / $25 useful or noisy? | Stage 8 |
 | Which extracted fields each screen displays (all are stored regardless). | Stage 4 onward, per screen |
-| Server-side image conversion library for HEIC (must run in the ARM64 container). | Stage 2 |
+| Server-side image conversion library for HEIC (must run natively on macOS ARM64; macOS's built-in `sips` is one option, behind an adapter). | Stage 2 |
 | What "other records from online retailers" covers beyond CSV (e.g. PDF invoices, order confirmation emails), and whether any are in scope. Currently digital/PDF receipts are a non-goal. | Stage 10 |
 | Other retailers' report formats, as they're supplied. | Stage 10 |
 | Status of imported entries: `unreviewed` (proposed) or treated as checked like manual entries. | Stage 10 |
@@ -829,10 +874,12 @@ Each stage ends in something that runs and is verified. A stage is done when its
 |---|---|
 | A local model is less accurate than large hosted models. | Evaluation harness picks the best model that fits; required review step; consistency checks; OCR + text model fallback adapter; identifier learning reduces reliance on the model over time. |
 | Extraction is slow on modest hardware. | Extraction is asynchronous, so capture is never blocked; images are resized; jobs run one at a time. |
-| Fin Snap disrupts people chatting on the shared LLM server, or leaves it on the wrong model. | Starts only when the server is free; respects reservations; stops between receipts when someone starts chatting; batches capped at ~10 minutes; lease recorded before every switch and restored on startup after a crash; never overrides a model someone else chose. |
+| Fin Snap disrupts people chatting on the shared LLM server, or leaves it on the wrong model. | Fin Snap never switches models; the relay does. It runs receipts only when no one is chatting and the server isn't reserved, interrupts them when a chat arrives, and switches back afterward. Interrupted receipts go back to Fin Snap's queue without using up attempts. |
 | A busy LLM server delays extraction for a long time. | Receipts wait safely in the queue; the receipts list shows "waiting for the model server". Unreviewed counting starts once extraction finishes. |
 | iOS clears PWA storage after long inactivity, losing queued receipts. | Upload as soon as possible; show the pending count; warn when a receipt has been queued for more than a day. |
 | Item matching gets messy (same item, many spellings and sizes). | Per-company item identifiers, matched by item code first; merge tool for canonical items; raw text is kept so items can be re-mapped later. |
 | Architecture erodes over time. | Boundary rules enforced by `pnpm check`; contract tests keep fakes honest; ADRs record why decisions were made. |
 | A receipt is matched to the wrong company. | Automatic matches only from identifiers a person confirmed; model guesses and similar names are never applied; conflicts are flagged, not guessed; processor/point-of-sale branding is excluded; a corrected mistake marks the causing identifier ambiguous so it can't recur; store identification has its own score in the evaluation harness. |
-| Home server downtime (sleep, updates, power loss). | Mac set to never sleep and restart after power failure; services start at login; phones keep queueing offline; jobs resume after restart; nightly backups. |
+| Home server downtime (sleep, updates, power loss). | Mac set to never sleep and restart after power failure; FileVault off so restarts need no password; services start at boot as LaunchDaemons with no login needed; phones keep queueing offline; jobs resume after restart; nightly backups. |
+| The Mac is stolen; with FileVault off, its disk can be read. | Accepted trade-off for unattended restarts (§4.7). Backup drives are encrypted; the Mac is kept somewhere private. |
+| A compromised npm package reads household data or sends it out. | Install scripts blocked except an approved list; lockfile-only installs; its own standard account with private folders; outgoing internet blocked for that account (§4.7). |

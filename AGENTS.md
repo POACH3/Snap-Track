@@ -52,6 +52,13 @@ delete the section.
 - [ ] `ask`: this stack's install command (e.g. `pip install`, `cargo add`),
       cloud CLI, dev deploy script, and every database command that changes
       data or schema.
+      For native hosting (`SPEC.md` §4.7), also add: `Bash(launchctl:*)`,
+      `Bash(sudo launchctl:*)`, `Bash(deploy/deploy.sh:*)`,
+      `Bash(./deploy/deploy.sh:*)`, `Bash(pfctl:*)`, `Bash(sudo pfctl:*)`,
+      `Bash(sysadminctl:*)`, `Bash(dscl:*)`, `Bash(chown:*)`, `Bash(chmod:*)`.
+      Until these are added, the "Ask first" rule for them is written guidance
+      only, not enforced. Keep any existing `docker` entries; removing them
+      would loosen permissions.
 - [ ] `deny`: the production deploy and packaging scripts; `Read`, `Edit` and
       `Write` for every real `.env*` file this project uses.
 - [ ] After pasting, ask the agent to read the file back and confirm it is
@@ -67,7 +74,7 @@ Before starting any multi-step build, always include a verification plan as part
 
 Here's how this repo is structured. Always check here before assuming.
 
-Fin Snap is a household receipt and expense tracker: a TypeScript pnpm monorepo with a React + Vite PWA client and a Fastify server (SQLite + Drizzle) in one Docker container, using ports and adapters, reached from phones over Tailscale HTTPS, with receipt extraction done by a vision model on the household's existing LLM server.
+Fin Snap is a household receipt and expense tracker: a TypeScript pnpm monorepo with a React + Vite PWA client and a Fastify server (SQLite + Drizzle) running natively on the Mac Studio as a macOS service (LaunchDaemon) under its own account, using ports and adapters, reached from phones over Tailscale HTTPS, with receipt extraction done by a vision model on the household's existing LLM server.
 
 Folders marked *(Stage 0)* do not exist yet; they are created when the scaffold is built (`SPEC.md` §4.2 and §11).
 
@@ -83,7 +90,7 @@ project_root/
 ├── docs/                    # README.md (doc directory), DESIGN.md (UI style guide), TESTING.md, BUGS.md, REFACTOR.md
 │   ├── feature-plans/       # one plan per feature; README.md is the registry
 │   └── adr/                 # (Stage 0) architecture decision records
-├── docker-compose.yml, Dockerfile   # (Stage 0)
+├── deploy/                  # (Stage 0) LaunchDaemon definitions, deploy script, firewall rules, setup notes (`SPEC.md` §4.7)
 └── .claude/                 # Claude Code only: settings.json (shared permissions), rules/ (agent rules); settings.local.json is personal and git-ignored
 ```
 
@@ -126,10 +133,11 @@ Script names other than `pnpm check` are proposed and get confirmed when the
 Stage 0 scaffold adds them to `package.json`.
 
 - Install: `pnpm install`
-- Run locally: `pnpm dev` (server and web client in watch mode); `docker compose up` runs the full container
+- Run locally: `pnpm dev` (server and web client in watch mode)
 - Check everything: `pnpm check` (format check, lint, typecheck, boundary check, all tests; `SPEC.md` §3.6)
 - Tests only: `pnpm test`; end-to-end: `pnpm test:e2e` (Playwright)
 - Build: `pnpm build`
+- Deploy: `deploy/deploy.sh` (proposed; ask first, see below)
 - Database: `pnpm db:generate` (create a migration from schema changes), `pnpm db:migrate` (apply migrations)
 
 ## Working Rules (Three Tiers)
@@ -154,20 +162,22 @@ Stage 0 scaffold adds them to `package.json`.
   tool (`npm install`, `npx`, `pip install`, `brew install`, `curl`/`wget`
   downloads). Enforced in Claude Code via `.claude/settings.json` `permissions.ask`.
 - Any cloud deployment or infra command (`aws`, `cdk`, `sam`, `serverless`,
-  `terraform`, or your provider's CLI), `tailscale`, and `docker` /
-  `docker compose` (building or starting the container). Enforced in Claude
-  Code via `permissions.ask`.
+  `terraform`, or your provider's CLI), `tailscale`, `launchctl` (loading,
+  unloading or restarting a service), `deploy/deploy.sh`, firewall changes
+  (`pfctl`, Little Snitch rules), and changes to macOS accounts or the service
+  folders' owners or permissions (`sysadminctl`, `dscl`, `chown`, `chmod`).
+  Enforced in Claude Code via `permissions.ask`.
 - Database commands that change data or schema (`pnpm db:migrate`,
   `pnpm db:generate`, any reset or seed script, and anything run against the
   `DATABASE_PATH` file); see `.claude/rules/database-commands.md`.
 - Any call that loads, unloads or switches models on the shared LLM server;
   other people use it for chat (`SPEC.md` §4.1).
 - Anything that changes the running production Fin Snap server on the Mac
-  Studio: rebuilding or restarting its container, copying files to it, or
-  running migrations against its database. Before running, name the target
-  (production) and what will change. The development container
-  (`fin-snap-dev`, with its own database and image volume) is separate and
-  follows the `docker` rule above.
+  Studio: deploying to it, restarting its `fin-snap` LaunchDaemon, copying
+  files into its data folder, or running migrations against its database.
+  Before running, name the target (production) and what will change. The
+  development service (`fin-snap-dev`, with its own data folder, database and
+  image folder) is separate and follows the `launchctl` and deploy rule above.
 - `git pull` (which can do either a merge or a rebase): it combines history.
   Enforced in Claude Code via `permissions.ask`.
 - `rm -rf`, `sudo`.
