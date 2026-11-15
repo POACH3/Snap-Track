@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocateCents, formatUsd } from "./money.ts";
+import { allocateCents, dollarsToCents, formatUsd } from "./money.ts";
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
@@ -52,5 +52,15 @@ describe("formatUsd", () => {
     expect(formatUsd(1234)).toBe("$12.34");
     expect(formatUsd(5)).toBe("$0.05");
     expect(formatUsd(-250)).toBe("-$2.50");
+  });
+});
+
+describe("dollarsToCents", () => {
+  it("converts printed amounts exactly, removing floating-point noise", () => {
+    expect(dollarsToCents(4.99)).toBe(499);
+    expect(dollarsToCents(0.1 + 0.2)).toBe(30);
+    expect(dollarsToCents(1234.5)).toBe(123450);
+    expect(dollarsToCents(-5)).toBe(-500);
+    expect(dollarsToCents(0)).toBe(0);
   });
 });

@@ -9,7 +9,7 @@ import { Pill } from "../../shared/ui/Pill.tsx";
 import { CAPTURE_PATH } from "../capture/CaptureProvider.tsx";
 import type { QueueEntry } from "../sync/upload-queue.ts";
 import { useUploader } from "../sync/uploader-context.ts";
-import { STATUS_LABEL, formatCapturedAt, photoCount } from "./receipt-format.ts";
+import { STATUS_LABEL, formatCapturedAt, formatTotal, photoCount } from "./receipt-format.ts";
 import styles from "./ReceiptsScreen.module.css";
 import { useReceiptList } from "./use-receipts.ts";
 
@@ -93,7 +93,10 @@ export function ReceiptsScreen() {
                         {receipt.loggedBy.displayName} · {photoCount(receipt.images.length)}
                       </span>
                     </span>
-                    <Pill variant={status.variant}>{status.label}</Pill>
+                    <span className={styles.end}>
+                      <span className={styles.total}>{formatTotal(receipt.totalCents)}</span>
+                      <Pill variant={status.variant}>{status.label}</Pill>
+                    </span>
                   </Link>
                 </li>
               );

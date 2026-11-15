@@ -8,6 +8,7 @@ import { createHttpServer } from "./platform/http/create-http-server.ts";
 import { os } from "./platform/http/rpc.ts";
 import { systemClock } from "./platform/system-clock.ts";
 import { createAuthModule } from "./modules/auth/index.ts";
+import { createExtractionModule, RelayExtractor } from "./modules/extraction/index.ts";
 import { healthRouter } from "./modules/health/index.ts";
 import { createReceiptsModule, FileSystemFileStore, SipsImageConverter } from "./modules/receipts/index.ts";
 
@@ -16,7 +17,18 @@ if (!config.ok) {
   console.error(`SnapTrack will not start: the configuration is invalid.\n  ${config.error.join("\n  ")}`);
   process.exit(1);
 }
-const { NODE_ENV, PORT, DATABASE_PATH, IMAGE_DIR, SESSION_SECRET, PUBLIC_ORIGIN } = config.value;
+const {
+  NODE_ENV,
+  PORT,
+  DATABASE_PATH,
+  IMAGE_DIR,
+  SESSION_SECRET,
+  PUBLIC_ORIGIN,
+  LLM_SERVER_URL,
+  LLM_SERVER_API_KEY,
+  EXTRACTION_MODEL,
+  EXTRACTION_TIMEOUT_MS,
+} = config.value;
 
 let sqlite;
 try {
@@ -53,6 +65,33 @@ const receipts = createReceiptsModule({
   files: new FileSystemFileStore(IMAGE_DIR),
   converter: new SipsImageConverter(),
   users: auth.service,
+  // Each new receipt is queued for extraction in the transaction that saves it (SPEC.md §4.3).
+  onUploaded: {
+    receiptUploaded: (receiptId) => {
+      extraction.uploadedListener.receiptUploaded(receiptId);
+    },
+  },
+});
+
+const extraction = createExtractionModule({
+  db,
+  clock: systemClock,
+  transaction,
+  receipts: receipts.service,
+  extractor: new RelayExtractor({
+    baseUrl: LLM_SERVER_URL,
+    apiKey: LLM_SERVER_API_KEY,
+    model: EXTRACTION_MODEL,
+    timeoutMs: EXTRACTION_TIMEOUT_MS,
+  }),
+  log: {
+    info: (details, message) => {
+      app.log.info(details, message);
+    },
+    error: (details, message) => {
+      app.log.error(details, message);
+    },
+  },
 });
 
 const router = os.router({ auth: auth.router, health: healthRouter, receipts: receipts.router });
@@ -68,11 +107,15 @@ const app = createHttpServer({
 // launchd stops the service with SIGTERM.
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, () => {
-    void app.close().then(() => {
-      sqlite.close();
-      process.exit(0);
-    });
+    void extraction.worker
+      .stop()
+      .then(() => app.close())
+      .then(() => {
+        sqlite.close();
+        process.exit(0);
+      });
   });
 }
 
 await app.listen({ host: "127.0.0.1", port: PORT });
+extraction.worker.start();

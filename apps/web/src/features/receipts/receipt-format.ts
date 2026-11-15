@@ -1,4 +1,5 @@
 import type { ReceiptStatus } from "@snaptrack/contracts";
+import { formatUsd } from "@snaptrack/core";
 
 /** How each status is shown (docs/DESIGN.md, "Components": pills; warning for review required). */
 export const STATUS_LABEL: Record<ReceiptStatus, { label: string; variant: "plain" | "accent" | "warning" }> =
@@ -25,3 +26,6 @@ export function formatCapturedAt(iso: string): string {
 }
 
 export const photoCount = (n: number) => (n === 1 ? "1 photo" : `${n} photos`);
+
+/** The total, or a dash while there is none yet (not read, or not printed). */
+export const formatTotal = (cents: number | null) => (cents === null ? "—" : formatUsd(cents));

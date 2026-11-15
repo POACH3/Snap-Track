@@ -3,6 +3,8 @@
 import { FakeClock } from "@snaptrack/core/testing";
 import { createAuthModule } from "../modules/auth/index.ts";
 import { FakePasswordHasher } from "../modules/auth/testing/fake-password-hasher.ts";
+import { createExtractionModule, type ReceiptExtractor } from "../modules/extraction/index.ts";
+import { ScriptedExtractor } from "../modules/extraction/testing/scripted-extractor.ts";
 import { healthRouter } from "../modules/health/index.ts";
 import { createReceiptsModule, type FileStore, type ImageConverter } from "../modules/receipts/index.ts";
 import { FakeImageConverter } from "../modules/receipts/testing/fake-image-converter.ts";
@@ -19,6 +21,8 @@ export interface TestAppOptions {
   secureCookies?: boolean;
   files?: FileStore;
   converter?: ImageConverter;
+  /** Defaults to a scripted extractor with no replies; the worker isn't started unless a test starts it. */
+  extractor?: ReceiptExtractor;
   maxRequestBytes?: number;
   webDistDir?: string;
   logLevel?: string;
@@ -45,6 +49,19 @@ export function createTestApp(options: TestAppOptions = {}) {
     files,
     converter: options.converter ?? new FakeImageConverter(),
     users: auth.service,
+    onUploaded: {
+      receiptUploaded: (receiptId) => {
+        extraction.uploadedListener.receiptUploaded(receiptId);
+      },
+    },
+  });
+  const extraction = createExtractionModule({
+    db,
+    clock,
+    transaction,
+    receipts: receipts.service,
+    extractor: options.extractor ?? new ScriptedExtractor(),
+    log: { info: () => undefined, error: () => undefined },
   });
   const app = createHttpServer({
     router: os.router({ auth: auth.router, health: healthRouter, receipts: receipts.router }),
@@ -54,7 +71,7 @@ export function createTestApp(options: TestAppOptions = {}) {
     webDistDir: options.webDistDir,
     ...(options.maxRequestBytes === undefined ? {} : { maxRequestBytes: options.maxRequestBytes }),
   });
-  return { app, auth, receipts, files, clock, sqlite };
+  return { app, auth, receipts, extraction, files, clock, sqlite };
 }
 
 /** Headers every API call from the web client carries. */

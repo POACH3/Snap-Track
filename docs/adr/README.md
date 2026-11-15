@@ -10,3 +10,4 @@ Numbered in order; a later record may supersede an earlier one, and says so.
 | [0003](0003-hosting-and-runtime.md) | Native LaunchDaemon, root-owned code, TypeScript run directly by Node | accepted |
 | [0004](0004-outgoing-internet-block.md) | Outgoing internet block with pf per-user rules | accepted |
 | [0005](0005-image-conversion-sips.md) | Server-side image conversion with macOS `sips` | accepted |
+| [0006](0006-extraction-model-and-relay.md) | Extraction model and relay contract | accepted |

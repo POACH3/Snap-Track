@@ -1,4 +1,6 @@
+import type { ReceiptStatus } from "@snaptrack/contracts";
 import type { Id, PixelSize } from "@snaptrack/core";
+import type { ExtractionResult } from "./domain/extracted-data.ts";
 import type { ListPosition } from "./domain/list-cursor.ts";
 import type { Receipt, ReceiptImage, ReceiptWithImages } from "./domain/receipt.ts";
 
@@ -10,6 +12,19 @@ export interface ReceiptRepository {
   /** Newest first by capture time, then id; only receipts after `after` when given. */
   list(options: { after: ListPosition | undefined; limit: number }): ReceiptWithImages[];
   findImage(imageId: Id): ReceiptImage | undefined;
+  /** Changes the status only if it is now one of `from`. Returns whether it changed. */
+  setStatus(id: Id, status: ReceiptStatus, from: readonly ReceiptStatus[]): boolean;
+  /** Replaces the extracted data and line items, and sets the status. */
+  saveExtraction(id: Id, result: ExtractionResult, status: ReceiptStatus): void;
+}
+
+/**
+ * Told about each new receipt inside the transaction that saves it, so the follow-up work (an
+ * extraction job) is saved with it or not at all. Wired by the composition root, since the
+ * module that does the work depends on `receipts` (SPEC.md §4.3). Synchronous, like repositories.
+ */
+export interface ReceiptUploadedListener {
+  receiptUploaded(receiptId: Id): void;
 }
 
 /**

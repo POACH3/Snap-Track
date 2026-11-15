@@ -34,6 +34,16 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 | `apps/server/src/modules/receipts/adapters/rpc.test.ts` | Upload over HTTP (multipart, as the oRPC client sends it), person from the session, same upload twice is one record, 415 for non-images, 413 over the size limit, 400 with no images, list and get, 404; image routes: JPEG with cache headers, 401 without a session, 404 for unknown or malformed ids |
 | `apps/server/src/modules/receipts/testing/file-store.contract.test.ts` | `FileStore` contract (put, replace, get missing, delete, refuses escaping keys, copies bytes), run against the file-system adapter and the fake; no partial files left |
 | `apps/server/src/modules/receipts/testing/image-converter.contract.test.ts` | `ImageConverter` contract (reads JPEG, PNG and HEIC sizes; HEIC to JPEG at an exact size; refuses junk), run against `sips` (macOS only) and the fake |
+| `packages/core/src/quantity.test.ts` | `toMilli` (exact thousandths) |
+| `packages/contracts/src/extraction.test.ts` | Extraction schema: everything optional, wrong types become null, amounts written as text, unreadable list entries dropped, non-objects refused |
+| `apps/server/src/modules/receipts/domain/extraction-rules.test.ts` | Model reply to stored rows (cents, thousandths, units, dates, last four digits, store evidence); usable-amount rule; every consistency check firing and staying quiet |
+| `apps/server/src/modules/extraction/domain/extraction-rules.test.ts` | Reading the model's JSON (code fences, extra text, refusals); outcome rules: save, wait (default and suggested times, bounds), back-off 1-2-4-8 min, five attempts, one retry for invalid output |
+| `apps/server/src/modules/extraction/application/extraction-service.test.ts` | Upload queues a job in the same transaction; typical receipt reaches `unreviewed` with lines, evidence, payments, transcription; long receipt sent as one request in order; unreadable → `review_required`; no amounts → `review_required`; missing photos; offline, busy, reserved, interrupted never use attempts; five failures; exceptions count; stop puts the job back; restart mid-job resumes (real SQLite and receipts module, scripted extractor) |
+| `apps/server/src/modules/extraction/adapters/relay-extractor.test.ts` | Relay adapter against a stub HTTP server: request headers, settings and images in order; output; keep-alive spaces; 200 without choices; reserved and busy with `Retry-After`; 502 and connection refused; other statuses; time limit; cancel; `Retry-After` parsing |
+| `apps/server/src/modules/extraction/adapters/prompt.test.ts` | The prompt's JSON template names exactly the schema's fields |
+| `apps/server/src/modules/extraction/adapters/sqlite-job-repository.test.ts` | One job per receipt; claim order and due times; failed attempts recorded only when told; running jobs reset; finished jobs never claimed |
+| `apps/server/src/modules/extraction/adapters/extraction-worker.test.ts` | Worker reads an upload at once, picks up queued receipts at start, stops promptly |
+| `apps/server/src/modules/extraction/adapters/backfill-migration.test.ts` | Migration 0003 queues a job for each receipt uploaded before extraction existed |
 | `apps/web/src/features/sync/in-memory-upload-queue.test.ts` | Upload queue: order, no duplicate ids, states, removal, change notifications |
 | `apps/web/e2e/capture.spec.ts` | Playwright: three images chosen together become three receipts; a long receipt in three photos becomes one receipt with images in order; a dropped HEIC is converted and displays; Snap and Done upload on a phone; leaving the capture screen uploads the open receipt; tab bar on phones, side navigation on desktop |
 | `apps/server/src/testing/api-protection.test.ts` | Walks the whole contract: every non-public procedure refuses requests without a valid session |
@@ -48,6 +58,9 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 - `apps/server/src/modules/receipts/testing/`: `InMemoryFileStore`, `FakeImageConverter`,
   `fakeImage()` (a real format signature plus its size as text, which the fake converter reads),
   and `makeRealImage()` (real PNG, JPEG and HEIC files, made with sips, for adapter tests).
+- `apps/server/src/modules/extraction/testing/scripted-extractor.ts`: `ScriptedExtractor`
+  (plays back replies, records requests) and `output()`. `createTestApp()` uses one with no
+  replies and doesn't start the worker; the e2e server doesn't start it either.
 - `apps/web/e2e/fixtures/`: three small JPEGs of different widths and one HEIC, made with
   `makeRealImage()`.
 - `apps/server/src/modules/auth/testing/fake-password-hasher.ts`: instant stand-in for Argon2.
@@ -60,6 +73,7 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 - Web client components (no component tests); the capture and upload paths are covered by Playwright.
 - Real phones: camera capture on Android and iPhone, choosing from an iPhone library, and an
   iPhone HEIC's rotation are checked by hand (`docs/feature-plans/capture-and-upload-plan.md`).
+- The real LLM server: one manual request with the owner's go-ahead (`docs/feature-plans/extraction-plan.md`).
 - Login screen in Playwright: used by every end-to-end test, but its error cases are not.
 - `pnpm user:create` / `user:set-password` prompts: checked by hand with piped input against a scratch database.
 - Host setup, firewall, Tailscale and deploy (Stage 0 steps 9–11): manual checks,

@@ -3,4 +3,5 @@ export { createReceiptsModule, type ReceiptsModuleOptions } from "./adapters/rec
 export { FileSystemFileStore } from "./adapters/file-system-file-store.ts";
 export { SipsImageConverter } from "./adapters/sips-image-converter.ts";
 export type { ReceiptsService } from "./application/receipts-service.ts";
-export type { FileStore, ImageConverter, UserDirectory } from "./ports.ts";
+export type { FileStore, ImageConverter, ReceiptUploadedListener, UserDirectory } from "./ports.ts";
+export { checkConsistency, type ConsistencyWarning } from "./domain/consistency.ts";

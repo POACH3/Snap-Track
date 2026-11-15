@@ -9,6 +9,8 @@ export interface Receipt {
   readonly status: ReceiptStatus;
   /** ISO 8601 UTC, so text order is time order. */
   readonly capturedAt: string;
+  /** Null until extraction, or if no total was printed or read. */
+  readonly totalCents: number | null;
 }
 
 export interface ReceiptImage {
@@ -27,3 +29,6 @@ export interface ReceiptWithImages {
   /** In position order. */
   readonly images: readonly ReceiptImage[];
 }
+
+/** Statuses extraction may move a receipt between; it never touches one a person has handled. */
+export const EXTRACTION_STATUSES = ["uploaded", "extracting"] as const;

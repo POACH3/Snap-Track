@@ -25,3 +25,16 @@ export {
   receiptImagePath,
   receiptThumbnailPath,
 } from "./receipts.ts";
+export {
+  ExtractedLine,
+  ExtractedPayment,
+  ExtractedReceipt,
+  ExtractedStore,
+  ExtractedTaxLine,
+  ExtractedTransactionNumber,
+  LineUnit,
+  Payment,
+  StoreEvidence,
+  TaxLine,
+  TransactionNumber,
+} from "./extraction.ts";

@@ -22,6 +22,13 @@
       "when": 1794770479492,
       "tag": "0002_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794774474527,
+      "tag": "0003_extraction",
+      "breakpoints": true
     }
   ]
 }

@@ -55,3 +55,14 @@
   border-radius: var(--radius-panel);
   background: var(--surface);
 }
+
+/* Hero amount (docs/DESIGN.md, "Type"). */
+.total {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}

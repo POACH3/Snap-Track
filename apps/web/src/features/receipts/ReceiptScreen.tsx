@@ -5,7 +5,7 @@ import { Link, useParams } from "react-router";
 import { EmptyState } from "../../shared/ui/EmptyState.tsx";
 import { Loader } from "../../shared/ui/Loader.tsx";
 import { Pill } from "../../shared/ui/Pill.tsx";
-import { STATUS_LABEL, formatCapturedAt, photoCount } from "./receipt-format.ts";
+import { STATUS_LABEL, formatCapturedAt, formatTotal, photoCount } from "./receipt-format.ts";
 import styles from "./ReceiptScreen.module.css";
 import { useReceipt } from "./use-receipts.ts";
 
@@ -43,6 +43,7 @@ export function ReceiptScreen() {
         <p className={styles.meta}>
           Logged by {receipt.loggedBy.displayName} · {photoCount(receipt.images.length)}
         </p>
+        {receipt.totalCents !== null && <p className={styles.total}>{formatTotal(receipt.totalCents)}</p>}
         <Pill variant={status.variant}>{status.label}</Pill>
       </header>
       <ol className={styles.images} aria-label="Photos of this receipt">

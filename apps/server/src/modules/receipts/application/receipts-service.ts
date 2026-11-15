@@ -1,11 +1,18 @@
-import type { ReceiptSummary } from "@snaptrack/contracts";
+import type { ExtractedReceipt, ReceiptSummary } from "@snaptrack/contracts";
 import { err, newId, ok, sha256Hex, type Id, type Result, type Transaction } from "@snaptrack/core";
+import { fromExtraction, hasUsableAmounts } from "../domain/extracted-data.ts";
 import { detectImageFormat } from "../domain/image-format.ts";
 import { receiptImageKeys } from "../domain/image-keys.ts";
 import { planStoredImage, thumbnailSize } from "../domain/image-plan.ts";
 import { decodeCursor, encodeCursor, normalizeTimestamp } from "../domain/list-cursor.ts";
-import type { ReceiptImage, ReceiptWithImages } from "../domain/receipt.ts";
-import type { FileStore, ImageConverter, ReceiptRepository, UserDirectory } from "../ports.ts";
+import { EXTRACTION_STATUSES, type ReceiptImage, type ReceiptWithImages } from "../domain/receipt.ts";
+import type {
+  FileStore,
+  ImageConverter,
+  ReceiptRepository,
+  ReceiptUploadedListener,
+  UserDirectory,
+} from "../ports.ts";
 
 export interface ReceiptsDeps {
   receipts: ReceiptRepository;
@@ -13,6 +20,8 @@ export interface ReceiptsDeps {
   converter: ImageConverter;
   users: UserDirectory;
   transaction: Transaction;
+  /** Told about each new receipt in the transaction that saves it. */
+  onUploaded?: ReceiptUploadedListener;
 }
 
 export interface PutReceiptCommand {
@@ -47,6 +56,7 @@ export function createReceiptsService(deps: ReceiptsDeps) {
       status: receipt.status,
       source: receipt.source,
       capturedAt: receipt.capturedAt,
+      totalCents: receipt.totalCents,
       loggedBy: {
         id: receipt.loggedByUserId,
         displayName: names.get(receipt.loggedByUserId) ?? UNKNOWN_USER,
@@ -132,9 +142,14 @@ export function createReceiptsService(deps: ReceiptsDeps) {
           source: "photo",
           status: "uploaded",
           capturedAt: normalizeTimestamp(command.capturedAt),
+          totalCents: null,
         } as const;
         // False when another copy of this upload got there first; its files are the ones kept.
-        saved = deps.transaction.run(() => deps.receipts.insert(receipt, rows));
+        saved = deps.transaction.run(() => {
+          const inserted = deps.receipts.insert(receipt, rows);
+          if (inserted) deps.onUploaded?.receiptUploaded(command.id);
+          return inserted;
+        });
       } finally {
         if (!saved) await deleteFiles(written);
       }
@@ -163,6 +178,48 @@ export function createReceiptsService(deps: ReceiptsDeps) {
 
     getReceipt(id: Id): ReceiptSummary | undefined {
       return summaryOf(id);
+    },
+
+    /**
+     * A receipt's photos in order, for extraction. Undefined if the receipt is unknown or any
+     * photo is gone (deleted under the retention rules), since the model must see every one.
+     */
+    async imagesForExtraction(receiptId: Id): Promise<Uint8Array[] | undefined> {
+      const row = deps.receipts.findById(receiptId);
+      if (row === undefined || row.images.length === 0) return undefined;
+      const images: Uint8Array[] = [];
+      for (const image of row.images) {
+        const bytes = image.imageKey === null ? undefined : await deps.files.get(image.imageKey);
+        if (bytes === undefined) return undefined;
+        images.push(bytes);
+      }
+      return images;
+    },
+
+    /** Extraction started or was put off. Leaves a receipt a person has handled alone. */
+    setExtractionStatus(receiptId: Id, status: "extracting" | "uploaded"): void {
+      deps.receipts.setStatus(receiptId, status, EXTRACTION_STATUSES);
+    },
+
+    /**
+     * Saves what the model read and returns the receipt's new status: `unreviewed`, or
+     * `review_required` when it found no amounts at all (SPEC.md §5 Rules). Everything read is
+     * kept either way, to help the person who fills it in. Synchronous, so it can share a
+     * transaction with the job's own update.
+     */
+    saveExtraction(receiptId: Id, extracted: ExtractedReceipt): "unreviewed" | "review_required" {
+      const result = fromExtraction(extracted);
+      const status = hasUsableAmounts(result) ? "unreviewed" : "review_required";
+      const current = deps.receipts.findById(receiptId)?.receipt.status;
+      if (current === undefined || !(EXTRACTION_STATUSES as readonly string[]).includes(current))
+        return status;
+      deps.receipts.saveExtraction(receiptId, result, status);
+      return status;
+    },
+
+    /** The model couldn't read it: a person enters the data from the photo (SPEC.md §6.3). */
+    markReviewRequired(receiptId: Id): void {
+      deps.receipts.setStatus(receiptId, "review_required", EXTRACTION_STATUSES);
     },
 
     /** An image's bytes (always JPEG), or undefined if there is no such image or it was deleted. */

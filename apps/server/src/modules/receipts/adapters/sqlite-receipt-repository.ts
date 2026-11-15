@@ -1,10 +1,12 @@
-import type { Clock, Id } from "@snaptrack/core";
+import type { ReceiptStatus } from "@snaptrack/contracts";
+import { newId, type Clock, type Id } from "@snaptrack/core";
 import { and, asc, desc, eq, inArray, lt, or } from "drizzle-orm";
+import type { ExtractionResult } from "../domain/extracted-data.ts";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type { ListPosition } from "../domain/list-cursor.ts";
 import type { Receipt, ReceiptImage, ReceiptWithImages } from "../domain/receipt.ts";
 import type { ReceiptRepository } from "../ports.ts";
-import { receiptImages, receipts } from "./schema.ts";
+import { lineItems, receiptImages, receipts } from "./schema.ts";
 
 type Db = BetterSQLite3Database;
 type ReceiptRow = typeof receipts.$inferSelect;
@@ -16,6 +18,7 @@ const toReceipt = (row: ReceiptRow): Receipt => ({
   source: row.source,
   status: row.status,
   capturedAt: row.capturedAt,
+  totalCents: row.totalCents,
 });
 
 const toImage = (row: ImageRow): ReceiptImage => ({
@@ -74,6 +77,39 @@ export class SqliteReceiptRepository implements ReceiptRepository {
       .limit(options.limit)
       .all();
     return this.#withImages(rows);
+  }
+
+  setStatus(id: Id, status: ReceiptStatus, from: readonly ReceiptStatus[]): boolean {
+    const result = this.#db
+      .update(receipts)
+      .set({ status, updatedAt: this.#clock.now().toISOString() })
+      .where(and(eq(receipts.id, id), inArray(receipts.status, [...from])))
+      .run();
+    return result.changes === 1;
+  }
+
+  saveExtraction(id: Id, result: ExtractionResult, status: ReceiptStatus): void {
+    const now = this.#clock.now().toISOString();
+    this.#db
+      .update(receipts)
+      .set({ ...result.data, status, updatedAt: now })
+      .where(eq(receipts.id, id))
+      .run();
+    this.#db.delete(lineItems).where(eq(lineItems.receiptId, id)).run();
+    if (result.lines.length > 0) {
+      this.#db
+        .insert(lineItems)
+        .values(
+          result.lines.map((line) => ({
+            ...line,
+            id: newId(),
+            receiptId: id,
+            createdAt: now,
+            updatedAt: now,
+          })),
+        )
+        .run();
+    }
   }
 
   findImage(imageId: Id): ReceiptImage | undefined {

@@ -26,6 +26,8 @@ export const ReceiptSummary = z.object({
   source: ReceiptSource,
   /** When the photo was taken on the device. */
   capturedAt: z.iso.datetime(),
+  /** Null until extraction, or if no total was printed or read. */
+  totalCents: z.number().int().nullable(),
   loggedBy: z.object({ id: z.uuid(), displayName: z.string() }),
   /** Photos in order. Empty for manual and imported entries. */
   images: z.array(ReceiptImageRef),

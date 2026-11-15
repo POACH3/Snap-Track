@@ -42,3 +42,11 @@ export function allocateCents(total: Cents, weights: readonly number[]): Result<
   }
   return ok(result.map((c) => (c === 0 ? 0 : c * sign)));
 }
+
+/**
+ * A decimal amount as printed (4.99) in cents. Printed amounts have at most two decimals, so
+ * rounding only removes floating-point noise (4.99 × 100 = 499.00000000000006).
+ */
+export function dollarsToCents(amount: number): Cents {
+  return Math.round(amount * 100);
+}

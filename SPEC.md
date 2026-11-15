@@ -153,10 +153,10 @@ Every fake adapter lives next to its port and is reused by all tests (no per-tes
 ### 4.1 Components
 - **Client (PWA).** Single-page React app, installable to the home screen, responsive from phone to desktop (§1, Devices). Handles capture, offline queueing, review, and visualization. Contains no business rules beyond input validation. Served by the SnapTrack server, so there is one origin.
 - **SnapTrack server.** Owns all data and business logic: auth, upload, extraction pipeline, normalization, categorization, analytics.
-- **LLM server (existing, shared).** The household's private LLM server already runs on the same Mac (the separate LLM-Server project, owned by the developer: a relay in front of oMLX, which runs MLX models natively on the GPU). It serves chat models to other people and holds **one model in memory at a time**, so larger models fit and the machine keeps memory free for other work; switching models takes roughly 8–13 seconds. SnapTrack does not install or own it. SnapTrack reaches it over its network port through one port in code, `ReceiptExtractor`: send a receipt image to the vision model and get structured data back.
+- **LLM server (existing, shared).** The household's private LLM server already runs on the same Mac (the separate LLM-Server project, owned by the developer: a relay in front of oMLX, which runs MLX models natively on the GPU). It serves chat models to other people and holds **one model in memory at a time**, so larger models fit and the machine keeps memory free for other work; switching models takes roughly 8–13 seconds. SnapTrack does not install or own it. SnapTrack reaches it over its network port through one port in code, `ReceiptExtractor`: send a receipt's images to the model and get structured data back. Its everyday chat model (Qwen3.6-35B-A3B) also reads images, so no separate vision model is needed.
 
-  The relay, not SnapTrack, decides when to switch to the vision model and when to switch back. SnapTrack's requests are low priority: they wait while anyone is chatting and may be interrupted by a chat (§6.3.1).
-- **Job runner.** In-process background queue behind the `JobQueue` port. Jobs are persisted in the database so a restart resumes them.
+  SnapTrack never loads or switches a model. Its requests are low priority: the relay turns them away while anyone is chatting or another model is loaded, and SnapTrack tries again later (§6.3.1).
+- **Job runner.** In-process background worker. Extraction jobs are persisted in their own table (`extraction_jobs`) so a restart resumes them. A generic `JobQueue` port arrives with its second user, the nightly retention cleanup (§6.8).
 - **Storage.** SQLite database file plus an image directory in the SnapTrack account's data folder (§4.7), each behind its own port.
 - **Network.** Tailscale provides private access from phones anywhere and a valid HTTPS certificate (required for PWA install, service workers, and camera access).
 
@@ -212,7 +212,7 @@ modules/receipts/
 |---|---|---|
 | `auth` | users, sessions, login | — |
 | `receipts` | receipts, line items, images, receipt lifecycle, consistency checks, image retention cleanup, updating its own rows when catalog entries are merged | `catalog` (to resolve stores/items/categories), `settings` (retention period), `auth` (household members' display names, through its own `UserDirectory` port, wired in the composition root) |
-| `extraction` | extraction jobs, sending low-priority requests to the LLM server's relay, handling its busy / interrupted replies, validating model output | `receipts` (to save results), `catalog` (the category hierarchy, for suggestions) |
+| `extraction` | extraction jobs, sending low-priority requests to the LLM server's relay, handling its busy / interrupted replies, validating model output | `receipts` (to read images and save results, through its own `ReceiptsGateway` port; `receipts` tells it about each upload through a `ReceiptUploadedListener` in the same transaction, wired in the composition root), `catalog` (the category hierarchy, for suggestions; Stage 4) |
 | `catalog` | stores (companies), items, categories, store and item identifiers, store identification, matching and learning | — |
 | `settings` | household settings: reading, validating, and changing them | — |
 | `imports` | import batches, retailer format definitions, parsing and mapping CSV rows | `receipts` (to create receipts and line items through its public interface), `catalog` (to resolve the retailer's store) |
@@ -479,7 +479,7 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 - A line's tags are its item's tags plus its own, worked out by one shared domain function.
 
 **`extraction_jobs`** (extraction)
-- `id`, `receipt_id`, `status` (`pending`, `running`, `done`, `failed`), `attempts`, `last_error`, `next_attempt_at`
+- `id`, `receipt_id` (unique: one job per receipt), `status` (`pending`, `running`, `done`, `failed`), `attempts`, `invalid_outputs` (replies that weren't valid JSON; the second one gives up, §6.3 step 3), `last_error`, `next_attempt_at`
 - `model`, `raw_output` (model's response, kept for debugging and re-processing), `completed_at`
 - `attempts` counts real failures only. A request the relay answers with busy or interrupted (§6.3.1) puts the job back to `pending` without adding an attempt.
 
@@ -540,26 +540,26 @@ Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainme
 7. Receipts are sent one at a time, so the LLM server is never asked to do more than one thing for SnapTrack at once.
 
 #### 6.3.1 Sharing the LLM server
-The LLM server is shared with people chatting, holds one model at a time, and swapping models costs ~8–13 seconds each way. Receipt reading is low priority: it can wait, and it can be interrupted, as long as every receipt is eventually read. **The LLM server's relay decides when to switch models; SnapTrack never loads, unloads, or switches a model itself.** The low-priority support below is built in the LLM-Server project (owned by the developer).
+The LLM server is shared with people chatting and holds one model at a time; swapping models costs ~8–13 seconds each way and discards chat users' caches. Receipt reading is low priority: it can wait, as long as every receipt is eventually read. **SnapTrack never loads, unloads, or switches a model.** The chat model (Qwen3.6-35B-A3B, `mlx-community` 4-bit build, served by oMLX through `mlx-vlm`) reads images itself, so while it is loaded a receipt needs no switch. The low-priority support below is built in the LLM-Server project (owned by the developer). Settled with that project on 2026-11-15; the full reply table is in `docs/feature-plans/extraction-plan.md` and ADR 0006.
 
-**What SnapTrack needs from the relay:**
-1. **Low-priority requests.** SnapTrack marks its extraction requests as low priority (a header or a separate endpoint, chosen in the LLM-Server project). Otherwise they are ordinary OpenAI-compatible chat requests naming the vision model.
-2. **The relay schedules them.** It runs a low-priority request only when no chat is running and the server isn't reserved, switching to the vision model first. While low-priority requests keep arriving and no one is chatting, it keeps the vision model loaded, so the swap is paid once per run of receipts, not per receipt. When they stop, or a chat arrives, it switches back to the model that was loaded before.
-3. **Chat comes first.** When a chat request arrives while a receipt is being read, the relay may cancel the receipt and reply **interrupted**.
-4. **A clear "not now".** If the relay won't run the request soon (server in use, reserved, or switching away), it replies **busy** with a suggested retry time, rather than holding the request indefinitely.
-5. **Distinct replies.** Busy and interrupted each have their own response (status code, and `Retry-After` for busy), separate from real errors, so SnapTrack can tell "try again later" from "this failed". The exact codes are set in the LLM-Server project and handled only in the `ReceiptExtractor` adapter.
+**What SnapTrack needs from the relay** (`http://127.0.0.1:8081`):
+1. **Low-priority requests.** SnapTrack marks its requests with the header `X-LLM-Priority: low`. Otherwise they are ordinary OpenAI-compatible chat requests (not streamed) naming the chat model, with the images as base64 data URIs.
+2. **A clear "not now".** The relay refuses a low-priority request on arrival while a chat is running, or while another model (e.g. the coding model) is the one loaded, replying `503` with `error.code = "low_priority_busy"` and a `Retry-After`. While the owner has reserved the server it replies `503` `server_reserved`, also with `Retry-After`. It never holds a receipt waiting, and never switches models for one.
+3. **Distinct replies.** Busy, reserved, and "LLM server not running" (`502`, or no relay) are separate from real errors, so SnapTrack can tell "try again later" from "this failed". They are handled only in the `ReceiptExtractor` adapter.
+4. **Giving up frees the server.** The relay passes replies through as they arrive and drops its connection to oMLX when SnapTrack gives up, so a timed-out receipt stops using the model.
+5. **Later: chat comes first.** A chat that arrives while a receipt is being read runs alongside it for now (both slower; accepted 2026-11-15). If the relay learns to cancel a receipt for a chat, its **interrupted** reply gets its own code, and SnapTrack treats it like busy.
 
 **SnapTrack's side** (an application-layer use case; all LLM server access goes through the `ReceiptExtractor` port):
 1. Take the next pending extraction job whose `next_attempt_at` has passed (oldest first). Nothing happens while the queue is empty.
 2. Send it to the relay as a low-priority request.
 3. On success, validate and save the result (§6.3 steps 3–5).
-4. On **busy**, **interrupted**, or the LLM server being offline, put the job back to `pending` with `next_attempt_at` set (the relay's suggested retry time, or a couple of minutes). This does not count as an attempt: a job can be interrupted any number of times and is still completed eventually.
+4. On **busy**, **reserved**, **interrupted**, or the LLM server being offline, put the job back to `pending` with `next_attempt_at` set (the relay's suggested retry time, or a default per reason: 30 s busy, 5 min reserved, 2 min offline). This does not count as an attempt: a job can be interrupted any number of times and is still completed eventually.
 5. On a real error (timeout, server error, invalid output), count an attempt and retry with backoff (§6.3 steps 3 and 6).
 6. Send one receipt at a time, waiting for each answer before sending the next.
 
 SnapTrack's job queue is the only record of what still needs reading; the relay holds nothing between requests. A restart of either side loses nothing: SnapTrack's jobs are persisted (§4.1), and an interrupted or unanswered request is simply sent again.
 
-**Access through the relay, not oMLX directly**, with SnapTrack's own API key, so the LLM server records SnapTrack's usage under its own name.
+**Access through the relay, not oMLX directly**, with SnapTrack's own oMLX API sub-key (API calls only), and the header `X-OpenWebUI-User-Name: snaptrack`, so the relay's usage log records SnapTrack under its own name. Each request overrides the chat defaults: temperature 0, presence penalty 0, thinking off, at most 8,000 reply tokens. oMLX doesn't enforce a JSON schema (its add-on for that isn't installed), so the schema is written into SnapTrack's prompt and the reply is validated with Zod. When oMLX has committed to `200` (after 2 s it starts sending keep-alive spaces), a later failure arrives as a `200` with no `choices`; that counts as a failed attempt.
 
 **Model choice.** **Qwen3.6-35B-A3B (4-bit)**, for now. Spot checks on real receipts (a clean one and a slightly crumpled one) matched a large hosted model on every price and total. The model is set by `EXTRACTION_MODEL` (§4.5), so trying another one is a config change, not a code change.
 - Other models may be tried later. Short list:
@@ -867,8 +867,8 @@ Each stage ends in something that runs and is verified. A stage is done when its
 **Done when:** a photo taken on both an Android phone and an iPhone shows up in the list with the right person attached; three photos chosen together from an iPhone library become three receipts; a long receipt taken as three photos with **Add another photo** becomes one receipt with three images in order; a HEIC file dragged in on a desktop uploads and displays; uploading the same receipt twice creates one record.
 
 ### Stage 3 — Extraction
-**Build:** extraction schema in `contracts`; `extraction` module; `JobQueue` port with persisted SQLite adapter; `ReceiptExtractor` port with LLM-server adapter and fake, including busy / interrupted replies; the extraction loop (§6.3.1); consistency checks; low-priority request support in the relay (built in the LLM-Server project, §6.3.1); vision model added to the LLM server.
-**Model:** Qwen3.6-35B-A3B (4-bit) (§6.3); record the choice in an ADR.
+**Build:** extraction schema in `contracts`; `extraction` module with its persisted job table; `ReceiptExtractor` port with relay adapter and fake, including busy / reserved / offline replies; the extraction loop (§6.3.1); consistency checks; low-priority request support in the relay (built in the LLM-Server project, §6.3.1). No vision model to add: the chat model reads images.
+**Model:** Qwen3.6-35B-A3B (4-bit), the LLM server's chat model (§6.3); recorded in ADR 0006.
 **Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; a long receipt in two or more photos is extracted as one receipt with every line; an unreadable image ends up `review_required`; a SnapTrack restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. While the relay replies busy, jobs wait without using up attempts and complete once it is free. A receipt interrupted by a chat goes back to the queue and is completed later, and interruptions never count toward the 5-attempt limit. (That the relay switches back to the previous model, and puts chat ahead of receipts, is tested in the LLM-Server project.)
 
 ### Stage 4 — Review and log
@@ -907,7 +907,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | Question | When it must be decided |
 |---|---|
 | Whether two-pass extraction (OCR model + text model) or another vision model beats Qwen3.6-35B-A3B (§6.3). | Stage 9 |
-| The relay's low-priority API: how a request is marked low priority, and the exact busy / interrupted replies (§6.3.1). Built in the LLM-Server project. | Stage 3 |
+| Decided: the relay's low-priority API (`X-LLM-Priority: low`; `503` `low_priority_busy` / `server_reserved` with `Retry-After`; `502` offline), §6.3.1, ADR 0006. Built in the LLM-Server project. | Stage 3 (done) |
 | Decided: `pf` per-user rules, opened for the whole install step during deploys (ADR 0004); per-user matching confirmed on macOS 27.0.1 on 2026-11-15. | Stage 0 (done) |
 | Decided: the standalone Tailscale app connects only after login; someone logs in after any restart (§4.7). | Stage 0 (done) |
 | How oRPC mounts on Fastify (its adapter or Node handler), and that a receipt image upload works through it end to end. | Stage 0 |
@@ -918,7 +918,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | Whether and how recorded tax codes are interpreted (e.g. to spread tax only across the lines it applies to). | Stage 6 |
 | Spike threshold: is 1.5× / $25 useful or noisy? | Stage 8 |
 | Which extracted fields each screen displays (all are stored regardless). | Stage 4 onward, per screen |
-| The vision model's own image-size limit in oMLX / `mlx-vlm` (it may shrink images again before reading them), and whether it must be raised so long receipts stay readable (§6.1). | Stage 3 |
+| Decided: oMLX does not shrink receipt photos to 1 MP. Tested 2026-11-15 through the relay: a 4 MP photo used 3,410 prompt tokens (about 1,000 if shrunk) and took 14.9 s (12.2 s reading the image). No oMLX setting needed (§6.1). | Stage 3 (done) |
 | Decided: server-side image conversion uses macOS's built-in `sips`, behind the `ImageConverter` port (ADR 0005). | Stage 2 (done) |
 | What "other records from online retailers" covers beyond CSV (e.g. PDF invoices, order confirmation emails), and whether any are in scope. Currently digital/PDF receipts are a non-goal. | Stage 10 |
 | Other retailers' report formats, as they're supplied. | Stage 10 |
