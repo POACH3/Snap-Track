@@ -84,7 +84,8 @@ project_root/
 │   │   └── src/             # main.ts (composition root), cli/ (admin commands), config/, platform/ (db, HTTP/oRPC), modules/<feature>/, testing/ (whole-app test helpers)
 │   └── web/
 │       ├── src/             # React PWA: app/ (routing, layout, theme.css), features/<feature>/, shared/ (UI components, API client, hooks)
-│       └── e2e/             # Playwright specs and fixtures (`pnpm test:e2e`)
+│       ├── e2e/             # Playwright specs and fixtures (`pnpm test:e2e`)
+│       └── brand/           # source logo for the app icons in public/ (not served)
 ├── packages/
 │   ├── contracts/           # Zod schemas and the oRPC API contract (single source of truth for data shapes)
 │   └── core/                # money, ids, Result type, Transaction port type

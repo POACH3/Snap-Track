@@ -1,11 +1,10 @@
 # SnapTrack
 
-SnapTrack is a private, self-hosted expense tracker for one household. Snap a photo of a paper receipt and it becomes structured, line-item expense data: the store, every item, prices, discounts, tax and payment. That data feeds monthly breakdowns, spending trends and price tracking. Everything runs on home hardware; no data leaves the home network.
+SnapTrack is a private, self-hosted expense tracker for one household. Snap a photo of a paper receipt and it becomes structured, line-item expense data: the store, every item, prices, discounts, tax and payment. That data will feed monthly breakdowns, spending trends and price tracking. Everything runs on home hardware; no data leaves the home network.
 
-![Status](https://img.shields.io/badge/status-planning-lightgrey)
+![Status](https://img.shields.io/badge/status-in%20development-yellow)
 ![Language](https://img.shields.io/badge/language-TypeScript-blue)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
-<!--![Tests](https://img.shields.io/badge/tests-%20none-lightgrey)-->
 
 ---
 
@@ -22,49 +21,35 @@ SnapTrack is built for a single household of a few people on a mix of Android ph
 
 ## How it works
 
-1. **Capture.** On a phone, tap **Snap** to photograph a receipt, or choose several photos from the library at once. On a desktop, pick image files or drag them in. JPEG, PNG and iPhone HEIC photos all work.
-2. **Save first, upload after.** Each receipt is saved on the device before it uploads, so capture works with no connection and nothing is lost. Queued receipts upload when the connection returns, and the app shows how many are waiting.
-3. **Extraction.** On the server, a self-hosted vision model reads the receipt: the store and its identifying details, date and time, every line item with quantity, price and discounts, subtotal, tax, total, payments, and a full word-for-word transcription. Receipts it cannot read are marked for review and filled in by hand.
-4. **Store identification.** The store is identified as a company (Walmart, not "Walmart #4512") and matched only on a known identifier, never on a guess. Once someone confirms the store for one receipt, SnapTrack remembers its identifiers and never asks again.
-5. **Item naming and categories.** The same item is counted as one across receipts. Each line is categorized on its own, so one receipt can span several categories. Corrections and names you give items carry forward to future receipts. The software's own suggestions are never applied unless you accept them.
-6. **Review.** Extracted data counts right away, marked unreviewed, and can be checked at any time beside the original image.
-7. **Analysis.** Expenses roll up into breakdowns, trends, price history and spending spikes.
-
-Expenses without a paper receipt can be entered by hand, as a quick entry (store, date, total, category) or a full entry with line items. Purchase history from online retailers (Amazon first) can be imported from the retailer's CSV order report.
+1. **Capture.** On a phone, tap **Snap** to photograph a receipt, or choose several photos from the library at once; each becomes its own receipt. A long receipt can be taken in several photos with **Add another photo**. On a desktop, pick image files or drag them in. JPEG, PNG and iPhone HEIC photos all work.
+2. **Upload.** The phone shrinks each photo to about 4 megapixels before sending it. Photos the browser can't read itself (such as HEIC on a desktop) are converted on the server. Uploads are safe to repeat: sending the same receipt twice creates one record.
+3. **Extraction.** On the server, a vision model on the household's own LLM server reads the receipt: the store and its identifying details, date and time, every line item with quantity, unit price and discounts, subtotal, tax, total, payments, and a full word-for-word transcription. Receipts are read one at a time, in the background, and only when no one is using the LLM server for chat. Receipts it cannot read are marked for review.
+4. **Checks.** SnapTrack checks that the figures add up (lines to subtotal, subtotal plus tax to total, payments to total, quantity times unit price) and keeps any mismatch as a warning for whoever reviews the receipt.
+5. **Review** *(planned)*. Extracted data counts right away, marked unreviewed, and can be checked at any time beside the original photos.
+6. **Store identification** *(planned)*. The store is identified as a company (Walmart, not "Walmart #4512") and matched only on a known identifier, never on a guess. Once someone confirms the store for one receipt, SnapTrack remembers its identifiers and never asks again.
+7. **Items and categories** *(planned)*. The same item is counted as one across receipts. Each line is categorized on its own, so one receipt can span several categories. Corrections and names you give items carry forward to future receipts. The software's own suggestions are never applied unless you accept them.
+8. **Analysis** *(planned)*. Expenses roll up into breakdowns, trends, price history and spending spikes.
 
 ---
 
-## Planned features
+## Features
 
-### Capture and entry
+### Working now
+- Login for each household member; every receipt records who logged it
 - Camera capture, multi-photo library selection, and desktop upload with drag and drop
-- Offline capture with an upload queue that syncs automatically
-- Quick and full manual entry
-- Retailer CSV import (Amazon first) that never creates duplicates, even for overlapping files
+- Long receipts in several photos, kept together in order
+- Photo shrinking on the device, and server-side conversion of HEIC and other photos the browser can't read
+- Receipts list with thumbnails, status and totals; receipt view with every photo
+- Automatic extraction of store details, line items, totals, tax, payments and a full transcription, with retries when the LLM server is busy or offline
+- Consistency checks on the extracted figures
+- Installable web app with a phone tab bar and desktop side navigation
 
-### Review and organization
-- Side-by-side view of the receipt image and its extracted data, with zoom
-- Stores as companies, recognized automatically after one confirmation
-- Item names you set, shown everywhere that item appears
-- A four-level category hierarchy (category, subcategory and two levels of class), starting from 12 editable defaults: Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainment, Clothing, Kids, Pets, Gifts, Other
-- A default category per store, and per-item or per-purchase changes
-- Free tags (such as "dessert" or "treat") on an item or a single purchase
-- Duplicate warnings
-
-### Analytics
-- Monthly breakdowns by store, item, category and tag, filterable by person, date range, review state and source
-- Trends: month over month and year over year, overall and per store, item or category
-- Spending by payment method
-- Price history per item per store, with the latest price at each store
-- Flags for unusual spending spikes in a store or category
-- Search and combined filters
-- Tax, tips and receipt-wide discounts spread across lines so category totals add up to what was actually paid
-
-### Your data
-- Full export at any time: one ZIP with a CSV per table, a spreadsheet-friendly expenses CSV, a complete JSON file and, optionally, the receipt images
-- An Export button on every list, breakdown and trend view (CSV now, XLSX planned)
-- Household settings for how long receipt images are kept (extracted data is always kept)
-- Nightly backups with a tested restore
+### Planned
+- **Capture and entry:** offline capture with an upload queue that syncs automatically; quick and full manual entry; retailer CSV import (Amazon first) that never creates duplicates, even for overlapping files
+- **Review and organization:** side-by-side view of the photos and their data, with zoom; stores recognized automatically after one confirmation; item names you set, shown everywhere that item appears; a four-level category hierarchy starting from 12 editable defaults (Groceries, Dining, Household, Personal Care, Health, Transportation, Entertainment, Clothing, Kids, Pets, Gifts, Other); a default category per store, and per-item or per-purchase changes; free tags (such as "dessert" or "treat"); duplicate warnings
+- **Analytics:** monthly breakdowns by store, item, category and tag, filterable by person, date range, review state and source; month-over-month and year-over-year trends; spending by payment method; price history per item per store; flags for unusual spending spikes; search and combined filters; tax, tips and receipt-wide discounts spread across lines so category totals add up to what was actually paid
+- **Your data:** full export at any time (a CSV per table, a spreadsheet-friendly expenses CSV, a complete JSON file and, optionally, the photos); an Export button on every list and chart; household settings for how long receipt photos are kept; nightly backups with a tested restore
+- **Extraction:** a comparison of other vision models, and of a two-step approach (a text-reading model followed by a structuring model)
 
 ---
 
@@ -73,7 +58,8 @@ Expenses without a paper receipt can be entered by hand, as a quick entry (store
 - **Fully private.** Receipts are read by a vision model on the household's own LLM server. No third-party AI services and no paid services.
 - **Private access.** The server is reachable only from household devices over Tailscale, never the open internet.
 - **Accounts.** One login per household member. No public sign-up.
-- **Recoverable.** All data lives in one SQLite file and one image folder, backed up nightly and restorable with plain file copies.
+- **Isolated.** SnapTrack runs under its own macOS account, can change only its own data folder, and is blocked from reaching the internet.
+- **Recoverable.** All data lives in one SQLite file and one image folder, which can be backed up and restored with plain file copies.
 
 ### Not in scope
 - Public or multi-household use
@@ -90,11 +76,12 @@ Expenses without a paper receipt can be entered by hand, as a quick entry (store
 | Part | Choice |
 |---|---|
 | Language | TypeScript throughout, in a pnpm workspaces monorepo |
-| Client | React + Vite installable web app (PWA), responsive from phone to desktop, with an IndexedDB upload queue and offline support |
+| Client | React + Vite installable web app (PWA), responsive from phone to desktop |
 | Server | Node + Fastify, with a contract-first oRPC API whose Zod schemas are shared between client and server |
 | Database | SQLite with Drizzle ORM and migrations |
-| Extraction | A vision model on the existing LLM server (oMLX): Qwen3.6-35B-A3B (4-bit) for now, with other models and two-pass extraction compared in Stage 9 |
-| Hosting | Runs natively on the Mac as a macOS service under its own account, with no Docker; the LLM server runs the same way |
+| Extraction | Qwen3.6-35B-A3B (4-bit) on the household's LLM server (oMLX), reached through its relay as low-priority requests, so chat always comes first |
+| Image conversion | macOS's built-in `sips` |
+| Hosting | Runs natively on a Mac as a macOS service under its own account, with no Docker |
 | Network | Tailscale, for private access and HTTPS |
 | Quality | Vitest, Playwright, ESLint, Prettier and dependency-cruiser, all run by one `pnpm check` command |
 
@@ -102,51 +89,50 @@ The server follows a ports-and-adapters design: business logic never touches the
 
 ---
 
-## Build plan
+## Extraction results
 
-Each stage ends in something that runs and is tested.
+First real receipts read through the full pipeline (November 2026), each on the first try:
 
-| Stage | Delivers |
+| Receipt | Result |
 |---|---|
-| 0 | Scaffold, quality checks, native macOS service, HTTPS over Tailscale, installable placeholder app |
-| 1 | Accounts and login |
-| 2 | Capture and upload (online) |
-| 3 | Extraction with the vision model |
-| 4 | Review, stores, items, categories, tags and manual entry |
-| **5** | **Offline capture and sync, backups, settings and full export: first usable version (MVP)** |
-| 6 | Monthly breakdowns and charts |
-| 7 | Trends |
-| 8 | Price tracking and spike flags |
-| 9 | Search and view export, plus an extraction model comparison |
-| 10 | Retailer CSV import |
+| Hardware store, 5 lines with quantity lines (2 @ 4.68, 3 @ 0.88) | Every line, code, quantity, unit price and total correct; store address, phone, card and transaction number captured; figures add up with no warnings |
+| Auto-parts store, a battery and its core charge | Every figure correct, with the core charge recognized as a fee; store details and card captured |
+
+A 4-megapixel photo takes about 15 seconds to read. Earlier side-by-side checks against a large cloud model (used only as a reference, not part of the app) agreed on every price and total.
 
 ### Known limitations
-- Extraction has been spot-checked only on a clean and a slightly crumpled receipt (see below); faded or very long receipts are untested until the Stage 9 comparison.
-- iPhones do not support background upload, so receipts captured offline on an iPhone upload the next time the app is opened.
-
-### Early extraction tests
-
-Informal spot checks from 2026-11-14, ahead of the Stage 3 evaluation. Each model got the same image and the same prompt and returned a plain-text transcription only (no structured data). Claude Sonnet 5.5 is a cloud model used only as a reference for comparison; it is not part of the app.
-
-| Receipt | Qwen3.6-35B-A3B (4-bit, local) | Claude Sonnet 5.5 (reference) |
-|---|---|---|
-| Clean grocery receipt, 6 lines with item discounts | Every value matched the reference: names, prices, codes, totals. Column spacing was not kept. | Kept the column layout and indentation; noted the logo. |
-| Slightly crumpled auto-parts receipt, one item with a fee line | All prices and totals correct. Read one zero as the letter O in a payment code. Added an intro sentence before the text. Stopped one line earlier at the end. | All values correct; kept the column layout. |
-
-Both receipts add up (lines, tax and totals), and the two models agreed on every price and total. Neither receipt was faded, long, or had weighed items, quantity lines or separate coupons, so these tests do not yet show where the models differ on hard receipts.
+- Extraction has been checked on a handful of receipts. Faded receipts, weighed items and long receipts in several photos are not yet tested.
+- Until offline capture arrives, a receipt is uploaded as soon as it is captured; if the upload fails, it can be retried while the app stays open.
+- iPhones do not support background upload, so once offline capture arrives, receipts captured offline on an iPhone will upload the next time the app is opened.
 
 ---
 
 ## Usage
 
-Not runnable yet. Setup and run instructions arrive with Stage 0.
+### Development
+Requires macOS (image conversion uses `sips`), Node and pnpm at the versions pinned in `package.json`, and, for extraction, the household's LLM server.
+
+```sh
+pnpm install
+cp .env.example .env        # then fill in SESSION_SECRET and the LLM server values
+pnpm db:migrate             # creates the local database in data/
+pnpm user:create            # one login per household member
+pnpm dev                    # server and web app; open http://localhost:5173
+```
+
+`pnpm check` runs formatting, linting, type checks, architecture checks and all tests; `pnpm test:e2e` runs the browser tests.
+
+### Production
+SnapTrack runs on the Mac as a LaunchDaemon under its own account. Setup, deploys, rollbacks and checks are in [deploy/README.md](deploy/README.md).
 
 ---
 
 ## Documentation
 
-- [SPEC.md](SPEC.md): the full specification (requirements, data model, receipt pipeline, analytics, export, security and build plan). Where this README and the spec differ, the spec wins.
+- [SPEC.md](SPEC.md): the full specification (requirements, data model, receipt pipeline, analytics, export and security). Where this README and the spec differ, the spec wins.
 - [docs/DESIGN.md](docs/DESIGN.md): the UI style guide.
+- [docs/TESTING.md](docs/TESTING.md): what each test covers.
+- [docs/adr/](docs/adr/): architecture decision records.
 - [AGENTS.md](AGENTS.md): instructions for coding agents working in this repository.
 
 ---
@@ -156,5 +142,5 @@ Not runnable yet. Setup and run instructions arrive with Stage 0.
 **Start Date:** 13-NOV-2026  
 **License:** [GNU AGPL-3.0](LICENSE). Copyright (C) 2026 T. Stratton. Anyone may use, change and share this code; changed versions that are distributed or offered as a network service must be published under the same license.  
 **Language:** TypeScript  
-**Status:** Planning  
+**Status:** In development  
 **Topics:** expense-tracker, receipt-scanner, personal-finance, pwa, self-hosted, vision-language-model, typescript

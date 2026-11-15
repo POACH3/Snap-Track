@@ -1,7 +1,7 @@
 # Stage 3: extraction
 
 **Changes SPEC.md:** §4.1 Components (job runner), §4.3 Module responsibilities, §5 Data Model (`extraction_jobs`), §6.3 Extraction and §6.3.1 Sharing the LLM server, §11 Stage 3, §12 Open Questions.  
-**Status:** active (built 2026-11-15 on `main`; waiting for the relay changes in the LLM-Server project, SnapTrack's oMLX sub-key, and the real-relay test).
+**Status:** shipped (2026-11-15, commit `99d3151`; deployed; real receipts read through the relay in development and production).
 
 Builds `SPEC.md` §11 Stage 3: the extraction schema, the `extraction` module
 with its persisted job queue, the `ReceiptExtractor` port (relay adapter and
@@ -137,7 +137,7 @@ checks. Store and item matching (§6.4) is the `catalog` module, Stage 4.
 | Relay busy → jobs wait without using attempts | Use-case test with `low_priority_busy` and `server_reserved`, honoring `Retry-After` | automated |
 | Interrupted → back in the queue, never counted | Same rule as busy (the relay has no interrupt reply yet; whatever it adds maps to "wait") | automated (rule only) |
 | Relay adapter maps every reply in the table above; sends the headers and settings; times out | Adapter tests against a local stub HTTP server with recorded replies, including keep-alive spaces before the body | automated |
-| A real receipt through the real relay: works, image size, time per receipt | One request, with the owner's go-ahead (shared server), while Qwen is loaded and no one is chatting | manual |
+| A real receipt through the real relay: works, image size, time per receipt | One request, with the owner's go-ahead (shared server), while Qwen is loaded and no one is chatting | manual: passed 2026-11-15 (Home Depot and AutoZone receipts read correctly on the first try; 4 MP photo not shrunk; about 15 s per photo) |
 
 `pnpm check` and `pnpm build` must pass; `pnpm test:e2e` too, since the
 receipts list changes.

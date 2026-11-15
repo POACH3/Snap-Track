@@ -1,7 +1,7 @@
 # Stage 2: capture and upload (online)
 
 **Changes SPEC.md:** §4.3 Module responsibilities, §4.4 Tech stack, §5 Data Model (`receipts`, `receipt_images`), §6.1 Capture, §6.8 Image and file retention, §12 Open Questions.  
-**Status:** active (built 2026-11-15 on `main`; the manual phone checks below are still to do).
+**Status:** shipped (2026-11-15, commit `0a108c8`; deployed, and every phone check passed in production).
 
 Builds `SPEC.md` §11 Stage 2: the `receipts` module, the `FileStore` port,
 capture (camera, library, desktop picker and drag and drop, **Add another
@@ -162,9 +162,9 @@ queue is Stage 5.
 | A long receipt in three photos with **Add another photo** becomes one receipt with three images in order | Playwright: one photo, add two more, **Done** → one receipt, view shows three images in order | automated |
 | A HEIC file dragged in on desktop uploads and displays | Playwright (Chromium can't decode HEIC, so the original is sent): drop a HEIC fixture → thumbnail and full image load | automated |
 | Layout: tab bar below 640px, side navigation above | Playwright phone and desktop projects | automated |
-| A photo taken on an Android phone and on an iPhone shows up with the right person | By hand on both phones, against the development server | manual |
-| Three photos chosen from an iPhone library become three receipts | By hand on an iPhone | manual |
-| An iPhone HEIC shows the right way up (EXIF rotation survives conversion) | By hand: upload a portrait HEIC from an iPhone via desktop drag and drop | manual |
+| A photo taken on an Android phone and on an iPhone shows up with the right person | By hand on both phones, in production | manual: passed 2026-11-15 |
+| Three photos chosen from an iPhone library become three receipts | By hand on an iPhone | manual: passed 2026-11-15 |
+| An iPhone HEIC shows the right way up (EXIF rotation survives conversion) | By hand: upload a portrait HEIC from an iPhone via desktop drag and drop | manual: passed 2026-11-15 |
 
 `pnpm check`, `pnpm build` and `pnpm test:e2e` must pass.
 
