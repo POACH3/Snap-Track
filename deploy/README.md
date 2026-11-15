@@ -19,8 +19,10 @@ chat page). Production listens on `127.0.0.1:4300`; `pnpm dev` uses 4310.
 ## Before the first setup
 
 - [ ] `_snaptrack` exists (it does: uid 411, home `/opt/snap-track/home`, shell `/usr/bin/false`).
-- [ ] Energy settings: prevent automatic sleep; start up automatically after a power failure.
-- [ ] FileVault is off (otherwise nothing starts after a power cut until someone types a password).
+- [ ] Energy settings: prevent automatic sleep (done); start up automatically after a power
+      failure: `sudo pmset -a autorestart 1` (it then waits at the unlock screen).
+- [x] FileVault stays on (decided 2026-11-15). After a power cut or crash, nothing starts until
+      someone unlocks the Mac at its screen. For planned restarts use `sudo fdesetup authrestart`.
 - [ ] `mise` installed from the admin account (`brew install mise`).
 - [ ] Tailscale: MagicDNS and HTTPS certificates on (they are).
 
@@ -46,7 +48,9 @@ Tailscale address and a fresh `SESSION_SECRET`. It never shows the secret. **Sav
 | Go back one release | `sudo deploy/deploy.sh --rollback` |
 | Add a person / reset a password | `sudo deploy/admin.sh user:create` / `user:set-password` |
 | Logs | `sudo tail -f /opt/snap-track/logs/snaptrack.log` |
-| Restart | `sudo launchctl kickstart -k system/snaptrack` |
+| Restart SnapTrack | `sudo launchctl kickstart -k system/snaptrack` |
+| Restart the Mac (unattended) | `sudo fdesetup authrestart` (unlocks FileVault once, so services start with no login) |
+| After a power cut | Unlock the Mac at its screen; the services then start by themselves |
 | Stop / start | `sudo launchctl bootout system/snaptrack` / `sudo launchctl bootstrap system /Library/LaunchDaemons/snaptrack.plist` |
 | Firewall state | `sudo /opt/snap-track/firewall/firewall.sh status` |
 | Check permissions and firewall | `sudo deploy/setup.sh --check` |
@@ -88,21 +92,20 @@ Tailscale address and a fresh `SESSION_SECRET`. It never shows the secret. **Sav
 
 Record the date and result next to each.
 
-- [ ] `sudo deploy/setup.sh --check` passes: modes, ACLs, `_snaptrack` can't write its code,
+- [x] 2026-11-15: `sudo deploy/setup.sh --check` passes: modes, ACLs, `_snaptrack` can't write its code,
       runtime or config; the admin account can't read `data/` or `.env`; outgoing internet
       refused while `127.0.0.1` works.
 - [ ] A failed deploy leaves the firewall on: break the lockfile on a scratch branch, deploy
       it, then `sudo -u _snaptrack curl -m 5 https://example.com` must fail.
 - [ ] Rollback: deploy commit A, deploy commit B, `--rollback`; the app is A again.
-- [ ] `pf` per-user rules work on this macOS version (the setup check covers it). If they
-      don't, the fallback is Little Snitch (ADR 0004).
-- [ ] **Reboot with no one logged in**; from a phone, open the production address. If it
+- [x] 2026-11-15: `pf` per-user rules work on macOS 27.0.1 (the setup check covers it).
+- [ ] **Reboot with no one logged in** (`sudo fdesetup authrestart`); from a phone, open the production address. If it
       doesn't load, check in this order: `snaptrack` running (`sudo launchctl print
       system/snaptrack`), the firewall (`firewall.sh status`), then Tailscale. If Tailscale
       is what's missing, the standalone app does not connect before login; the fix is the
       open-source `tailscaled` as a LaunchDaemon (it also affects the LLM server).
-- [ ] The app installs to the home screen on an iPhone and an Android phone.
-- [ ] Each household member logs in from their own phone (Stage 1).
+- [x] 2026-11-15: The app installs to the home screen on an iPhone and an Android phone.
+- [x] 2026-11-15: Each household member logs in from their own phone (Stage 1).
 
 ## Restore
 

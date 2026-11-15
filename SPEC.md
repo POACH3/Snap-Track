@@ -263,7 +263,7 @@ What this means for the design:
 - **Both services run natively** on this Mac (oMLX uses the GPU through Metal, which Docker on macOS cannot reach). SnapTrack reaches the LLM server at `127.0.0.1`. Hosting and isolation are in §4.7.
 - **Model size budget:** the LLM server loads one model at a time, so the vision model gets the GPU memory the chat model was using. Vision models up to roughly 35B parameters (such as the chosen Qwen3.6-35B-A3B) fit comfortably at 4-bit (about 20–25 GB; the current chat models use 19–26 GB). Larger models (~70B) technically fit but are likely too slow to be worth it; the Stage 3 evaluation decides.
 - **Speed:** expect seconds per receipt for small models and tens of seconds for ~32B models. Extraction is asynchronous, so this never blocks capture.
-- **Always on:** the Mac must not sleep (Energy settings: prevent automatic sleep; start after power failure). SnapTrack, the LLM server, and Tailscale start at boot with no one logged in (§4.7); FileVault is off so a restart needs no password. While the LLM server is stopped, extraction jobs simply wait.
+- **Always on:** the Mac must not sleep (Energy settings: prevent automatic sleep; start after power failure). SnapTrack, the LLM server, and Tailscale start at boot with no one logged in once the disk is unlocked (§4.7). FileVault is on, so after an unplanned restart someone must unlock the Mac first; planned restarts use `sudo fdesetup authrestart`, which unlocks it once. While the LLM server is stopped, extraction jobs simply wait.
 - **Storage:** at ~1 MB per resized receipt photo (§6.1), 1 TB is effectively unlimited even if images are kept forever. Image retention (§6.8) is a privacy and tidiness choice, not a disk-space need.
 - **Backups:** the nightly backup (§10) can target an external drive, and can also be covered by Time Machine.
 
@@ -300,7 +300,10 @@ Everything lives under `/opt/snap-track/` (`root:_snaptrack`, `750`):
 - SnapTrack runs as a **LaunchDaemon** (in `/Library/LaunchDaemons/`, with `UserName` set to the SnapTrack account and `KeepAlive` on), so it starts at boot with no one logged in and restarts if it crashes. A LaunchAgent starts only at login, so it is not used.
 - The LLM server runs the same way under its own account (set up in the LLM-Server project). Whether oMLX gets the GPU when started this way, with no one logged in, is tested before relying on it (§12).
 - Tailscale must also connect at boot with no one logged in; checked in Stage 0 (§12).
-- **FileVault is off.** With it on, the Mac stops at the unlock screen after a power cut and nothing starts until someone types a password. The trade-off is that someone who takes the Mac can read its disk (§13); backup drives are encrypted to limit this (§10).
+- **FileVault is on** (decided 2026-11-15). FileVault encrypts the whole disk, not one account, so it can't be turned off for the service account alone. Before the disk is unlocked macOS hasn't started, so no LaunchDaemon runs.
+  - **Planned restarts** (updates, maintenance): `sudo fdesetup authrestart` unlocks the disk once, so everything starts with no one logged in.
+  - **Unplanned restarts** (power cut, crash): SnapTrack, the LLM server and Tailscale stay down until someone types a password at the Mac. Accepted: they are rare, and from Stage 5 phones queue receipts while the server is down.
+  - The trade-off chosen: the disk stays encrypted if the Mac is taken, at the cost of manual recovery after a power cut (§13).
 
 **Supply-chain protection** (a bad npm package is the most likely threat)
 - **Install scripts are blocked.** pnpm runs no dependency install scripts except those allowed in `allowBuilds` in `pnpm-workspace.yaml` (pnpm 11; it refuses the install if another package wants one). Today none is allowed: `better-sqlite3` ships prebuilt binaries. Allowing one needs the developer's approval, like adding any dependency.
@@ -839,7 +842,7 @@ Every list, breakdown, and trend view has an **Export** button that downloads ex
 - Everything lives in two places: the SQLite file and the image directory.
 - A nightly job uses SQLite's online backup to make a safe copy in the SnapTrack backup folder (`/opt/snap-track/data/backups/`), copies new images alongside it, and keeps the last 14 nights. It can also copy them to an external drive.
 - Time Machine covers the backup folder. It may copy the live database file mid-write, so restores always use the nightly copies, never Time Machine's copy of the live file.
-- Backup drives (Time Machine and external) are encrypted, since the Mac's own disk is not (FileVault is off; §4.7).
+- Backup drives (Time Machine and external) are encrypted, like the Mac's own disk (FileVault is on; §4.7).
 - Restore = stop the SnapTrack service, put the files back, start the service. Documented and tested once in Stage 5. `.env` is not in the backups (§9); on a fresh machine it is recreated from the developer's saved values.
 
 ---
@@ -850,7 +853,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 
 ### Stage 0 — Scaffold and quality gates
 **Build:** monorepo with `apps/server`, `apps/web`, `packages/contracts`, `packages/core`; strict TypeScript, ESLint, Prettier, Vitest; dependency-cruiser rules for §3.1; `pnpm check`; config loader with validation; structured logging; Fastify serving the built React app; SQLite + Drizzle with a first migration; `.env.example`; first ADR recording this architecture; hosting per §4.7: the SnapTrack account, the folder layout and permissions, LaunchDaemon, Node and pnpm version pins, install-script allowlist, minimum release age, outgoing-internet block, `tailscale serve`, deploy and rollback script, and setup notes in `deploy/`. Plan: [stage-0-scaffold-plan.md](docs/feature-plans/stage-0-scaffold-plan.md).
-**Done when:** after a reboot with no one logged in, the SnapTrack LaunchDaemon serves a placeholder page over HTTPS at the Tailscale address from a phone, and it installs to the home screen; a deliberate boundary violation (e.g. a domain file importing Fastify) makes `pnpm check` fail; a dependency install script not on the allowlist does not run; an outgoing internet request from the SnapTrack account is refused while `localhost` still works, and is refused again after a deploy (including one that failed during the install step); another standard account, and the admin account without `sudo`, cannot read SnapTrack's data folder or `.env`; the SnapTrack account cannot write to its code, runtime, or config folders; a deploy followed by a rollback leaves the previous release serving.
+**Done when:** after a reboot with no one logged in (started with `sudo fdesetup authrestart`, since FileVault is on), the SnapTrack LaunchDaemon serves a placeholder page over HTTPS at the Tailscale address from a phone, and it installs to the home screen; a deliberate boundary violation (e.g. a domain file importing Fastify) makes `pnpm check` fail; a dependency install script not on the allowlist does not run; an outgoing internet request from the SnapTrack account is refused while `localhost` still works, and is refused again after a deploy (including one that failed during the install step); another standard account, and the admin account without `sudo`, cannot read SnapTrack's data folder or `.env`; the SnapTrack account cannot write to its code, runtime, or config folders; a deploy followed by a rollback leaves the previous release serving.
 
 ### Stage 1 — Accounts
 **Build:** `auth` module (users, sessions, login/logout, route protection); admin command to create users.
@@ -902,7 +905,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 |---|---|
 | Whether two-pass extraction (OCR model + text model) or another vision model beats Qwen3.6-35B-A3B (§6.3). | Stage 9 |
 | The relay's low-priority API: how a request is marked low priority, and the exact busy / interrupted replies (§6.3.1). Built in the LLM-Server project. | Stage 3 |
-| Proposed: `pf` per-user rules, opened for the whole install step during deploys (ADR 0004). Confirm per-user matching works on this macOS version (`deploy/README.md` checks). | Stage 0 |
+| Decided: `pf` per-user rules, opened for the whole install step during deploys (ADR 0004); per-user matching confirmed on macOS 27.0.1 on 2026-11-15. | Stage 0 (done) |
 | Whether Tailscale connects at boot with no one logged in (the standalone app, or the `tailscaled` daemon). | Stage 0 |
 | How oRPC mounts on Fastify (its adapter or Node handler), and that a receipt image upload works through it end to end. | Stage 0 |
 | Whether oMLX gets the GPU when run as a LaunchDaemon with no one logged in, under its real service account rather than an admin account (tested in the LLM-Server project). | Before Stage 3 |
@@ -934,6 +937,6 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | Item matching gets messy (same item, many spellings and sizes). | Per-company item identifiers, matched by item code first; merge tool for canonical items; raw text is kept so items can be re-mapped later. |
 | Architecture erodes over time. | Boundary rules enforced by `pnpm check`; contract tests keep fakes honest; ADRs record why decisions were made. |
 | A receipt is matched to the wrong company. | Automatic matches only from identifiers a person confirmed; model guesses and similar names are never applied; conflicts are flagged, not guessed; processor/point-of-sale branding is excluded; a corrected mistake marks the causing identifier ambiguous so it can't recur; store identification has its own score in the evaluation harness. |
-| Home server downtime (sleep, updates, power loss). | Mac set to never sleep and restart after power failure; FileVault off so restarts need no password; services start at boot as LaunchDaemons with no login needed; phones keep queueing offline; jobs resume after restart; nightly backups. |
-| The Mac is stolen; with FileVault off, its disk can be read. | Accepted trade-off for unattended restarts (§4.7). Backup drives are encrypted; the Mac is kept somewhere private. |
+| Home server downtime (sleep, updates, power loss). | Mac set to never sleep and restart after power failure; planned restarts use `fdesetup authrestart` so services start at boot as LaunchDaemons with no login needed; after an unplanned restart someone unlocks the Mac (FileVault, §4.7); phones keep queueing offline; jobs resume after restart; nightly backups. |
+| The Mac is stolen. | FileVault is on, so its disk can't be read; backup drives are encrypted too. The cost is manual unlock after an unplanned restart (§4.7). |
 | A compromised npm package reads household data, sends it out, or tampers with the service. | Install scripts blocked except an approved list; new package versions held back a week; lockfile-only installs; its own hidden service account with private folders; code, runtime, and config owned by root so the service can't change them; outgoing internet blocked for that account (§4.7). |

@@ -1,7 +1,7 @@
 # 0004: Outgoing internet block with pf per-user rules
 
-**Date:** 2026-11-15. **Status:** proposed (accepted once the Stage 0 checks in
-`deploy/README.md` pass on the Mac Studio).
+**Date:** 2026-11-15. **Status:** accepted (2026-11-15: `setup.sh --check` passed on the
+Mac Studio, macOS 27.0.1: `_snaptrack` refused for example.com and 1.1.1.1, `127.0.0.1` allowed).
 
 ## Context
 A malicious npm package is the likeliest threat (SPEC.md §13). SnapTrack must not be able
@@ -10,8 +10,10 @@ being reached by `tailscale serve` (also over `127.0.0.1`). Options: macOS's bui
 with per-user rules, or Little Snitch (domain-based rules, a paid GUI app).
 
 ## Decision
-- **pf**, no new software. Rules in `deploy/firewall/snaptrack.pf`: `_snaptrack` may send
-  only on `lo0`; anything else it sends is refused at once.
+- **pf**, no new software. Rules in `deploy/firewall/snaptrack.pf`: everything on `lo0`
+  passes (with `flags any`, so replies to incoming connections pass too: the first version
+  matched only connection-opening packets and blocked the server's replies); anything else
+  `_snaptrack` sends is refused at once.
 - **Loaded into the anchor `com.apple/300.SnapTrack`**, which the stock `/etc/pf.conf`
   already evaluates, so system files are never edited and macOS updates don't undo it.
 - **Kept on** by the `snaptrack.firewall` LaunchDaemon: at boot and every minute.
