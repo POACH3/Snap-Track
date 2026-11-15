@@ -6,5 +6,8 @@
 # both connect over 127.0.0.1. Everything else it sends out is refused at once
 # ("return", not "drop"), so the server's startup check fails fast instead of timing out.
 
-pass out quick on lo0 all user _snaptrack
+# "flags any": by default a pass rule matches only connection-opening packets, so the
+# server's replies to incoming connections (SYN-ACK) would skip it and be blocked below.
+# Traffic on lo0 never leaves this Mac, so it is passed for everyone.
+pass out quick on lo0 all flags any
 block return out quick all user _snaptrack
