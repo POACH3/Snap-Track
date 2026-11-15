@@ -28,7 +28,8 @@ restart_service() {
 wait_until_healthy() {
   local i
   for i in $(seq 1 30); do
-    if /usr/bin/curl -fsS -m 2 -o /dev/null "http://127.0.0.1:$PORT/healthz"; then return 0; fi
+    # Silent: failures are expected while the server restarts; only the outcome is reported.
+    if /usr/bin/curl -fs -m 2 -o /dev/null "http://127.0.0.1:$PORT/healthz"; then return 0; fi
     sleep 1
   done
   return 1

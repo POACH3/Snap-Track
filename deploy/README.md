@@ -97,7 +97,7 @@ Record the date and result next to each.
       refused while `127.0.0.1` works.
 - [ ] A failed deploy leaves the firewall on: break the lockfile on a scratch branch, deploy
       it, then `sudo -u _snaptrack curl -m 5 https://example.com` must fail.
-- [ ] Rollback: deploy commit A, deploy commit B, `--rollback`; the app is A again.
+- [x] 2026-11-15: Rollback: from `93f0d73775ec` back to `972281a81839`, which then served the app.
 - [x] 2026-11-15: `pf` per-user rules work on macOS 27.0.1 (the setup check covers it).
 - [x] 2026-11-15: **Reboot** (`sudo fdesetup authrestart`): `snaptrack` started 7 seconds
       after boot with no one logged in, firewall on. Tailscale (the standalone app) started
