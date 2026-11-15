@@ -18,13 +18,13 @@ chat page). Production listens on `127.0.0.1:4300`; `pnpm dev` uses 4310.
 
 ## Before the first setup
 
-- [ ] `_snaptrack` exists (it does: uid 411, home `/opt/snap-track/home`, shell `/usr/bin/false`).
-- [ ] Energy settings: prevent automatic sleep (done); start up automatically after a power
-      failure: `sudo pmset -a autorestart 1` (it then waits at the unlock screen).
+- [x] `_snaptrack` exists (it does: uid 411, home `/opt/snap-track/home`, shell `/usr/bin/false`).
+- [x] Energy settings: prevent automatic sleep; start up automatically after a power failure
+      (`sudo pmset -a autorestart 1`, set 2026-11-15; it then waits at the unlock screen).
 - [x] FileVault stays on (decided 2026-11-15). After a power cut or crash, nothing starts until
       someone unlocks the Mac at its screen. For planned restarts use `sudo fdesetup authrestart`.
-- [ ] `mise` installed from the admin account (`brew install mise`).
-- [ ] Tailscale: MagicDNS and HTTPS certificates on (they are).
+- [x] `mise` installed from the admin account (`brew install mise`).
+- [x] Tailscale: MagicDNS and HTTPS certificates on (they are).
 
 ## First setup
 
@@ -95,8 +95,9 @@ Record the date and result next to each.
 - [x] 2026-11-15: `sudo deploy/setup.sh --check` passes: modes, ACLs, `_snaptrack` can't write its code,
       runtime or config; the admin account can't read `data/` or `.env`; outgoing internet
       refused while `127.0.0.1` works.
-- [ ] A failed deploy leaves the firewall on: break the lockfile on a scratch branch, deploy
-      it, then `sudo -u _snaptrack curl -m 5 https://example.com` must fail.
+- [x] 2026-11-15: A failed deploy leaves the firewall on: a commit with `package.json` out of
+      step with the lockfile failed at `pnpm install` (`ERR_PNPM_OUTDATED_LOCKFILE`); the firewall
+      came back on, `_snaptrack` could not reach example.com, and production kept running.
 - [x] 2026-11-15: Rollback: from `93f0d73775ec` back to `972281a81839`, which then served the app.
 - [x] 2026-11-15: `pf` per-user rules work on macOS 27.0.1 (the setup check covers it).
 - [x] 2026-11-15: **Reboot** (`sudo fdesetup authrestart`): `snaptrack` started 7 seconds

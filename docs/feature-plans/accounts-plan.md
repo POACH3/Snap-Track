@@ -1,7 +1,7 @@
 # Stage 1: accounts and login
 
 **Changes SPEC.md:** §9 Security and Privacy (session lifetime, login throttling, CSRF).  
-**Status:** active (built on `main`, uncommitted; logging in from each phone waits for hosting).
+**Status:** shipped (2026-11-15; every household member logs in from their own phone).
 
 Builds `SPEC.md` §11 Stage 1: the `auth` module (users, sessions, login and
 logout, route protection) and a command to create users.
@@ -87,7 +87,7 @@ logout, route protection) and a command to create users.
 | Usernames unique regardless of case | Repository test on in-memory SQLite | automated |
 | Argon2 hashes verify; fake matches real | `PasswordHasher` contract test against both | automated |
 | `pnpm user:create` makes a user who can log in | Manual, against a scratch database | manual |
-| Each household member can log in from their own phone | Needs hosting (Stage 0 steps 9–11) or a temporary `tailscale serve` to the dev server; done then | manual, deferred |
+| Each household member can log in from their own phone | Done 2026-11-15 in production | manual |
 
 `pnpm check` and `pnpm build` must pass.
 

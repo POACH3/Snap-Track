@@ -1,7 +1,7 @@
 # Stage 0: scaffold, quality gates and hosting
 
 **Changes SPEC.md:** §4.5 Configuration, §4.7 Hosting and isolation, §9 Security and Privacy, §10 Backups, §11 Stage 0, §12 Open Questions, §13 Risks.  
-**Status:** active (steps 1–8 done; steps 9–11 written in `deploy/`, waiting for the developer to run them; E1–E2 are checks in `deploy/README.md`).
+**Status:** shipped (2026-11-15; every Stage 0 "Done when" check passed on the Mac Studio, see `deploy/README.md`).
 
 Builds everything in `SPEC.md` §11 Stage 0: the monorepo and its quality gates,
 a placeholder app served by Fastify, the first migration, and production hosting
