@@ -112,7 +112,8 @@ Same token names as the dark table above; only the values change. Every text pai
 | `h2` | 20px / 600, letter-spacing -0.01em |
 | `h3` | 16px / 600 |
 | Hero title | Big amounts (month total): 32px / 700, letter-spacing -0.02em, line height 1.1 |
-| Body / inputs / buttons | 15px; buttons 600 |
+| Body / buttons | 15px; buttons 600 |
+| Inputs, selects, text areas | 16px, so iOS doesn't zoom the page in when one is tapped (decided 2026-11-16) |
 | Small UI text, nav | 13px; tab bar labels 11px |
 | Form labels | 13px / 500, `--text-body` |
 | Section labels (eyebrows) | 12px / 600, uppercase, letter-spacing 0.06em, `--text-muted` |
@@ -234,6 +235,20 @@ Approved 2026-11-15 in the receipts mock (https://claude.ai/code/artifact/63f6b0
 | Store choice | Each suggestion is a 56px button (`--surface-raised`, `--border`, 12px radius): store name 15px / 600, the reason in 13px muted below ("Its phone number … is saved for this store", "Similar name"). The chosen one uses `--accent-tint`, `--accent-tint-border` and a check icon. The name the receipt shows is offered last among the suggestions as **Create "<name>"** with "A new store, named as the receipt shows it", chosen from the start when nothing else is suggested. Below: "Another store", a search input that also offers **Create "<name>"**. |
 | Consistency warning | Under the field it concerns: `--warning-tint` box with `--warning-border`, 12px radius, a 16px `triangle-alert` icon in `--warning`, 13px body text saying what doesn't add up. The field itself gets a `--warning` border. |
 | Collapsed sections | Note, More details, Store details as printed, Transcription: 44px rows with a chevron, inside one bordered box; each opens in place. |
+
+### Categories and tags
+
+Approved 2026-11-15 in the labels mock (https://claude.ai/code/artifact/c9a4413f-f79e-4e5a-a264-c1f75e59c82b, private to the developer). Colors for categories and tags wait for Stage 6; until then they use the plain pill.
+
+| Part | Look |
+|---|---|
+| Line category chip | Under the line's row, a plain pill (28px tall, `--surface-raised`, `--border`, 13px / 500 heading color) with the category's path ("Groceries › Dairy") and where it comes from in muted 400 weight ("· this item", "· this purchase", "· store default"). A button: it opens the category picker. A line with no category shows **Category** in the same pill. |
+| Line tags | Beside the chip, in the same wrapping row. An item's tag: plain pill. A tag on this purchase only: no fill, 1px dashed `--text-muted` border, labeled "<tag> · this purchase". |
+| Category suggestion | On a line with no category: "Suggested: **Groceries › Bakery**" (13px muted, the path in body color), then **Accept** (accent pill: `--accent-tint`, `--accent-tint-border`, `--accent-text`, 600) and **Dismiss** (no fill, `--border`, body text), both 28px. |
+| Store default question | At the top of the items card's body while the store has no default category: a box with `--accent-tint` and `--accent-tint-border`, 12px radius, 12px × 14px. "What do you usually buy at <store>?" (14px / 600 heading color), one 13px line saying what it does, then **Choose a category** (main button, 36px) and **Not now** (ghost, 36px). |
+| Set all lines | Secondary pill button (32px, 13px / 500) at the right of the items card's heading row. Opens the picker; the choice becomes every line's this-purchase category. |
+| Category picker | A modal (bottom sheet on phone). Heading **Category** with the item's name and current path below it (13px muted); for a store, **Default category** with the store's name. A row with a filter input (search icon) and a secondary **+ New category** button. Then the hierarchy as a tree in a bordered box (`--bg-page`, 12px radius) that scrolls inside the sheet: 40px rows indented 18px per level, a ▸ / ▾ chevron for entries with children, L1 in 600. The chosen row uses `--accent-tint`, `--accent-tint-border` and a check. An open category ends with a dashed-border row "+ Add a class under <name>". For an item only: an **Apply to** box (bordered, 12px radius) with radios **This item** ("Every purchase of <item>, at any store", chosen first) and **This purchase only**. Buttons: **Cancel**, then **Save category** (or **Set default** for a store). |
+| Library › Labels | Back link (‹ Library), `h1` **Labels**. A **Categories and classes** card: heading row with a secondary **+ Category** pill; the tree as 44px rows indented 20px per level, with a chevron, the name (L1 in 600), its level (L1–L4, 12px muted) and a 36px "⋯" menu (Rename, Move, Add a class, Remove; Remove in `--danger` text). Archived entries show in `--text-muted` with "(archived)". A muted 13px note at the bottom says the set can be edited and used entries are archived rather than deleted. A **Tags** card: heading row with **+ Tag**, a one-line muted description, and the tags as 32px plain pills with their purchase count in muted 400. |
 
 ## Overlays
 

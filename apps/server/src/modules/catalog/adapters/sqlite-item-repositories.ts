@@ -3,8 +3,8 @@ import { newId, type Clock, type Id } from "@snaptrack/core";
 import { asc, count, eq, inArray, sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type { LineIdentifier } from "../domain/items.ts";
-import type { ItemIdentifierRepository, ItemIdentifierRow, ItemRepository } from "../ports.ts";
-import { itemIdentifiers, items, stores } from "./schema.ts";
+import type { ItemIdentifierRepository, ItemIdentifierRow, ItemLabels, ItemRepository } from "../ports.ts";
+import { itemIdentifiers, items, itemTags, stores } from "./schema.ts";
 
 type Db = BetterSQLite3Database;
 const byName = sql`${items.name} collate nocase`;
@@ -64,6 +64,43 @@ export class SqliteItemRepository implements ItemRepository {
 
   all(): ItemRef[] {
     return this.#db.select(ref).from(items).all();
+  }
+
+  labelsOf(ids: readonly Id[]): Map<Id, ItemLabels> {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return new Map();
+    const found = this.#db
+      .select({ id: items.id, categoryId: items.categoryId })
+      .from(items)
+      .where(inArray(items.id, unique))
+      .all();
+    const tagged = this.#db
+      .select({ itemId: itemTags.itemId, tagId: itemTags.tagId })
+      .from(itemTags)
+      .where(inArray(itemTags.itemId, unique))
+      .all();
+    const tagsByItem = new Map<Id, Id[]>();
+    for (const { itemId, tagId } of tagged)
+      tagsByItem.set(itemId, [...(tagsByItem.get(itemId) ?? []), tagId]);
+    return new Map(found.map(({ id, categoryId }) => [id, { categoryId, tagIds: tagsByItem.get(id) ?? [] }]));
+  }
+
+  setCategory(id: Id, categoryId: Id | null): void {
+    this.#db
+      .update(items)
+      .set({ categoryId, updatedAt: this.#clock.now().toISOString() })
+      .where(eq(items.id, id))
+      .run();
+  }
+
+  setTags(id: Id, tagIds: readonly Id[]): void {
+    this.#db.delete(itemTags).where(eq(itemTags.itemId, id)).run();
+    const unique = [...new Set(tagIds)];
+    if (unique.length > 0)
+      this.#db
+        .insert(itemTags)
+        .values(unique.map((tagId) => ({ itemId: id, tagId })))
+        .run();
   }
 }
 

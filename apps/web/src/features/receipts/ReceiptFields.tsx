@@ -6,7 +6,17 @@ import { Modal } from "../../shared/ui/Modal.tsx";
 import { useToast } from "../../shared/ui/toast-context.ts";
 import { useItemSearch, useRenameItem } from "../library/use-items.ts";
 import {
+  LineLabelsRow,
+  SetAllLines,
+  StoreDefaultQuestion,
+  TagsSection,
+  useLabelContext,
+  type KnownStore,
+  type LabelContext,
+} from "./LineLabels.tsx";
+import {
   blankLine,
+  newItem,
   newKey,
   splitOf,
   type FormErrors,
@@ -26,6 +36,9 @@ interface FieldsProps {
   warnings: ReadonlyMap<string, readonly string[]>;
   wide: boolean;
   rawText: string | null;
+  /** The chosen store, when it already exists: its default category applies to the lines. */
+  store: KnownStore;
+  editing: boolean;
 }
 
 // ---------- small building blocks ----------
@@ -133,8 +146,18 @@ function RemoveRow({ label, onClick }: { label: string; onClick: () => void }) {
 // ---------- the form ----------
 
 /** Every editable field of a receipt (SPEC.md §6.5), in the order the review screens show them. */
-export function ReceiptFields({ form, update, errors, warnings, wide, rawText }: FieldsProps) {
+export function ReceiptFields({
+  form,
+  update,
+  errors,
+  warnings,
+  wide,
+  rawText,
+  store,
+  editing,
+}: FieldsProps) {
   const [optionsFor, setOptionsFor] = useState<string | null>(null);
+  const labels = useLabelContext(form, store);
   const set =
     <K extends keyof FormState>(key: K) =>
     (value: FormState[K]) => {
@@ -150,6 +173,7 @@ export function ReceiptFields({ form, update, errors, warnings, wide, rawText }:
 
   return (
     <div className={styles.fields}>
+      {editing && <StoreDefaultQuestion context={labels} />}
       <div className={styles.pair}>
         <Input
           label="Date"
@@ -163,9 +187,13 @@ export function ReceiptFields({ form, update, errors, warnings, wide, rawText }:
       </div>
 
       <section className={wide ? styles.linesCard : styles.group} aria-labelledby="lines-heading">
-        <h2 id="lines-heading" className={styles.eyebrow}>
-          Items · {form.lines.length}
-        </h2>
+        <div className={styles.linesHead}>
+          <h2 id="lines-heading" className={styles.eyebrow}>
+            Items · {form.lines.length}
+          </h2>
+          {/* On the phone it sits in the card's header instead (docs/DESIGN.md, "Set all lines"). */}
+          {wide && editing && <SetAllLines update={update} count={form.lines.length} />}
+        </div>
         {wide && form.lines.length > 0 && (
           <div className={styles.tableHead} aria-hidden>
             <span>Printed name</span>
@@ -261,6 +289,16 @@ export function ReceiptFields({ form, update, errors, warnings, wide, rawText }:
                   }}
                 />
               )}
+              <LineLabelsRow
+                line={line}
+                context={labels}
+                setLine={(change) => {
+                  setLine(key, change);
+                }}
+                onOpenOptions={() => {
+                  setOptionsFor(key);
+                }}
+              />
             </div>
           );
         })}
@@ -332,6 +370,7 @@ export function ReceiptFields({ form, update, errors, warnings, wide, rawText }:
       {optionsLine !== undefined && (
         <LineOptions
           line={optionsLine}
+          labels={labels}
           errors={errors}
           onChange={(change) => {
             setLine(optionsLine.key, change);
@@ -403,7 +442,7 @@ function ItemLabel({
           offer.item.name,
           { kind: "existing", item: offer.item },
         ]
-      : ["", offer.name, { kind: "new", name: offer.name }];
+      : ["", offer.name, newItem(offer.name)];
   return (
     <p className={styles.itemOffer}>
       <span>
@@ -490,7 +529,7 @@ function ItemSection({ line, onChange }: { line: FormLine; onChange: (item: Form
           label="New item's name, created when you confirm"
           value={current.name}
           onChange={(next) => {
-            onChange({ kind: "new", name: next });
+            onChange({ ...current, name: next });
           }}
         />
       )}
@@ -519,7 +558,7 @@ function ItemSection({ line, onChange }: { line: FormLine; onChange: (item: Form
                   type="button"
                   className={styles.choice}
                   onClick={() => {
-                    onChange({ kind: "new", name: query.trim() });
+                    onChange(newItem(query.trim()));
                     setChoosing(false);
                   }}
                 >
@@ -559,6 +598,7 @@ function ItemSection({ line, onChange }: { line: FormLine; onChange: (item: Form
 /** Everything about one line that the list leaves out, plus split and remove. */
 function LineOptions({
   line,
+  labels,
   errors,
   onChange,
   onSplit,
@@ -566,6 +606,7 @@ function LineOptions({
   onClose,
 }: {
   line: FormLine;
+  labels: LabelContext;
   errors: FormErrors;
   onChange: (change: Partial<FormLine>) => void;
   onSplit: () => void;
@@ -601,6 +642,7 @@ function LineOptions({
           onChange({ item });
         }}
       />
+      {line.kind === "item" && <TagsSection line={line} context={labels} setLine={onChange} />}
       <h3 className={styles.subhead}>Line</h3>
       <div className={styles.optionsGrid}>
         <Input

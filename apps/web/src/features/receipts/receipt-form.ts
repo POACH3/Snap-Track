@@ -9,6 +9,7 @@ import type {
   LineUnit,
   ReceiptDetail,
   ReceiptDraft,
+  SuggestionOutcome,
 } from "@snaptrack/contracts";
 import { formatUsd } from "@snaptrack/core";
 
@@ -16,8 +17,17 @@ let nextKey = 0;
 /** A key for a row the form adds, so React keeps each row's inputs as rows move. */
 export const newKey = () => `row-${++nextKey}`;
 
-/** A line's item in the form: a known one, a new one to create with the confirm, or none. */
-export type FormItem = { kind: "existing"; item: ItemRef } | { kind: "new"; name: string } | null;
+/**
+ * A line's item in the form: a known one, a new one to create with the confirm, or none. A new
+ * item carries the category and tags chosen "for this item" before it exists.
+ */
+export type FormItem =
+  | { kind: "existing"; item: ItemRef }
+  | { kind: "new"; name: string; categoryId: string | null; tagIds: string[] }
+  | null;
+
+/** A new item to create with the confirm, with no labels yet. */
+export const newItem = (name: string): FormItem => ({ kind: "new", name, categoryId: null, tagIds: [] });
 
 export interface FormLine {
   key: string;
@@ -37,6 +47,14 @@ export interface FormLine {
   lineTotal: string;
   discount: string;
   taxCode: string;
+  /** "This purchase only" (SPEC.md §5). */
+  categoryId: string | null;
+  /** Tags on this purchase only. */
+  tagIds: string[];
+  suggestionOutcome: SuggestionOutcome | null;
+  /** The model's guess, shown as `pendingSuggestion` allows; never sent. */
+  suggestedCategoryId: string | null;
+  suggestedTagIds: string[];
 }
 
 export interface FormState {
@@ -140,6 +158,11 @@ export function blankLine(): FormLine {
     lineTotal: "",
     discount: "",
     taxCode: "",
+    categoryId: null,
+    tagIds: [],
+    suggestionOutcome: null,
+    suggestedCategoryId: null,
+    suggestedTagIds: [],
   };
 }
 
@@ -213,6 +236,11 @@ export function formFromDraft(draft: ReceiptDetail["draft"]): FormState {
       lineTotal: moneyText(line.lineTotalCents),
       discount: moneyText(line.discountCents),
       taxCode: text(line.taxCode),
+      categoryId: line.categoryId,
+      tagIds: [...line.tagIds],
+      suggestionOutcome: line.suggestionOutcome,
+      suggestedCategoryId: line.suggestedCategoryId,
+      suggestedTagIds: [...line.suggestedTagIds],
     })),
   };
 }
@@ -245,7 +273,12 @@ export function draftFromForm(form: FormState): { draft: ReceiptDraft } | { erro
           ? null
           : line.item.kind === "existing"
             ? { kind: "existing", itemId: line.item.item.id }
-            : { kind: "new", name: line.item.name },
+            : {
+                kind: "new",
+                name: line.item.name,
+                categoryId: line.item.categoryId,
+                tagIds: line.item.tagIds,
+              },
       kind: line.kind,
       rawName: orNull(line.rawName),
       itemCode: orNull(line.itemCode),
@@ -255,6 +288,9 @@ export function draftFromForm(form: FormState): { draft: ReceiptDraft } | { erro
       lineTotalCents: money(`lines.${line.key}.lineTotal`, line.lineTotal),
       discountCents: money(`lines.${line.key}.discount`, line.discount),
       taxCode: orNull(line.taxCode),
+      categoryId: line.categoryId,
+      tagIds: line.tagIds,
+      suggestionOutcome: line.suggestionOutcome,
     };
   });
 

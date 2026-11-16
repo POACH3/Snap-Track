@@ -1,6 +1,6 @@
 import type { Payment, StoreEvidence, StoreMatch, TaxLine, TransactionNumber } from "@snaptrack/contracts";
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const receipts = sqliteTable(
   "receipts",
@@ -105,12 +105,36 @@ export const lineItems = sqliteTable(
     suggestedItemName: text("suggested_item_name"),
     /** An `items` id; null until matched or chosen. No foreign key: that table belongs to `catalog`. */
     itemId: text("item_id"),
+    /** "This purchase only": a `categories` id set by a person on this line alone. No foreign key: `catalog`'s table. */
+    lineCategoryId: text("line_category_id"),
+    /** The model's guesses, never applied on their own (SPEC.md §5). `categories` and `tags` ids. */
+    suggestedCategoryId: text("suggested_category_id"),
+    suggestedTagIds: text("suggested_tag_ids", { mode: "json" }).$type<string[]>(),
+    /** What a person did with the guess; null until then (SPEC.md §6.7). */
+    suggestionOutcome: text("suggestion_outcome", { enum: ["accepted", "dismissed"] }),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
     uniqueIndex("line_items_receipt_position_unique").on(table.receiptId, table.position),
     index("line_items_item_idx").on(table.itemId),
+    index("line_items_line_category_idx").on(table.lineCategoryId),
+    // No check on `suggestion_outcome`: adding one would make the migration rebuild this table.
     check("line_items_kind_check", sql`${table.kind} in ('item', 'fee')`),
+  ],
+);
+
+/** Tags on a single purchase only (SPEC.md §5). `tag_id` is a `tags` id; no foreign key: `catalog`'s table. */
+export const lineItemTags = sqliteTable(
+  "line_item_tags",
+  {
+    lineItemId: text("line_item_id")
+      .notNull()
+      .references(() => lineItems.id, { onDelete: "cascade" }),
+    tagId: text("tag_id").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.lineItemId, table.tagId] }),
+    index("line_item_tags_tag_idx").on(table.tagId),
   ],
 );

@@ -24,6 +24,7 @@ export {
   LineItemChoice,
   LineItemSuggestion,
   ListReceiptsInput,
+  SuggestionOutcome,
   MAX_IMAGE_BYTES,
   MAX_IMAGES_PER_RECEIPT,
   PutReceiptInput,
@@ -76,3 +77,14 @@ export {
   TaxLine,
   TransactionNumber,
 } from "./extraction.ts";
+export {
+  Category,
+  CategoryLevel,
+  CategorySource,
+  LabelName,
+  LineCategory,
+  MAX_CATEGORY_LEVEL,
+  MAX_LABEL_NAME_LENGTH,
+  RemoveOutcome,
+  Tag,
+} from "./labels.ts";

@@ -13,7 +13,7 @@ const NAME_TYPES: StoreIdentifierType[] = ["name", "legal_name", "logo_text"];
 const byName = sql`${stores.name} collate nocase`;
 
 /** SQLite's error when a unique index refuses a row. */
-const isUniqueViolation = (error: unknown) =>
+export const isUniqueViolation = (error: unknown) =>
   error instanceof Error && "code" in error && error.code === "SQLITE_CONSTRAINT_UNIQUE";
 
 export class SqliteStoreRepository implements StoreRepository {
@@ -110,6 +110,21 @@ export class SqliteStoreRepository implements StoreRepository {
       const saved = (byStore.get(store.id) ?? []).map((row) => row.value);
       return { ...store, names: [...new Set(own === null ? saved : [own, ...saved])] };
     });
+  }
+
+  defaultCategoryOf(id: Id): Id | null {
+    return (
+      this.#db.select({ categoryId: stores.defaultCategoryId }).from(stores).where(eq(stores.id, id)).get()
+        ?.categoryId ?? null
+    );
+  }
+
+  setDefaultCategory(id: Id, categoryId: Id | null): void {
+    this.#db
+      .update(stores)
+      .set({ defaultCategoryId: categoryId, updatedAt: this.#clock.now().toISOString() })
+      .where(eq(stores.id, id))
+      .run();
   }
 }
 

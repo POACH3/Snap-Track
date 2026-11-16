@@ -1,3 +1,4 @@
+import type { NumberedLabels } from "../domain/labels.ts";
 import type { ExtractorReply } from "../domain/reply.ts";
 import type { ReceiptExtractor } from "../ports.ts";
 
@@ -8,6 +9,8 @@ import type { ReceiptExtractor } from "../ports.ts";
  */
 export class ScriptedExtractor implements ReceiptExtractor {
   readonly requests: (readonly Uint8Array[])[] = [];
+  /** The labels each request offered the model. */
+  readonly labels: NumberedLabels[] = [];
   readonly #replies: ExtractorReply[];
 
   constructor(replies: ExtractorReply[] = []) {
@@ -20,8 +23,13 @@ export class ScriptedExtractor implements ReceiptExtractor {
     return this;
   }
 
-  extract(images: readonly Uint8Array[]): Promise<ExtractorReply> {
+  extract(
+    images: readonly Uint8Array[],
+    _signal?: AbortSignal,
+    labels?: NumberedLabels,
+  ): Promise<ExtractorReply> {
     this.requests.push(images);
+    if (labels !== undefined) this.labels.push(labels);
     const reply = this.#replies.shift();
     if (reply === undefined) throw new Error("ScriptedExtractor: no reply left for this request");
     return Promise.resolve(reply);

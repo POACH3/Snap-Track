@@ -54,6 +54,10 @@ export const ExtractedLine = z.object({
   taxCode: text,
   kind: lenient(z.enum(["item", "fee"])),
   suggestedName: text,
+  /** The number of the most specific fitting entry in the prompt's category list. */
+  category: lenient(z.preprocess(toNumber, z.number().int())),
+  /** Numbers from the prompt's tag list. */
+  tags: list(z.preprocess(toNumber, z.number().int())),
 });
 
 export const ExtractedTaxLine = z.object({

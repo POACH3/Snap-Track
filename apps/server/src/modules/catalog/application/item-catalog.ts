@@ -57,8 +57,11 @@ export function createItemCatalog(deps: ItemCatalogDeps) {
   function detail(itemId: Id): ItemDetail | undefined {
     const item = deps.items.findById(itemId);
     if (item === undefined) return undefined;
+    const labels = deps.items.labelsOf([itemId]).get(itemId);
     return {
       item,
+      categoryId: labels?.categoryId ?? null,
+      tagIds: [...(labels?.tagIds ?? [])],
       identifiers: deps.itemIdentifiers.listForItem(itemId).map((row) => ({
         id: row.id,
         type: row.type,
@@ -114,11 +117,25 @@ export function createItemCatalog(deps: ItemCatalogDeps) {
       });
     },
 
-    /** Synchronous, so a confirm can create a line's new item in the same transaction. */
-    createItem(name: string, nameSource: ItemNameSource): ItemRef {
+    /**
+     * Synchronous, so a confirm can create a line's new item in the same transaction. `labels` are
+     * a category and tags chosen for it "for this item" before it existed; the caller checks them.
+     */
+    createItem(
+      name: string,
+      nameSource: ItemNameSource,
+      labels: { categoryId: Id | null; tagIds: readonly Id[] } = { categoryId: null, tagIds: [] },
+    ): ItemRef {
       const item = { id: newId(), name, nameSource };
       deps.items.insert(item);
+      if (labels.categoryId !== null) deps.items.setCategory(item.id, labels.categoryId);
+      if (labels.tagIds.length > 0) deps.items.setTags(item.id, labels.tagIds);
       return item;
+    },
+
+    /** Each item's category and tags. */
+    itemLabels(ids: readonly Id[]) {
+      return deps.items.labelsOf(ids);
     },
 
     findItem(id: Id): ItemRef | undefined {

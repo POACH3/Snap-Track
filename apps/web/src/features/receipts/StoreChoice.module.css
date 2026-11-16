@@ -107,6 +107,8 @@
   background: var(--bg-page);
   color: var(--text-heading);
   font: inherit;
+  /* 16px, so iOS doesn't zoom in when it is tapped. */
+  font-size: 16px;
 }
 .input::placeholder {
   color: var(--text-muted);

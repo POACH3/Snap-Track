@@ -1,7 +1,7 @@
 import type { Clock, Id, Transaction } from "@snaptrack/core";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createExtractionService } from "../application/extraction-service.ts";
-import type { ReceiptExtractor, ReceiptsGateway } from "../ports.ts";
+import type { LabelSource, ReceiptExtractor, ReceiptsGateway } from "../ports.ts";
 import { ExtractionWorker, type WorkerLog } from "./extraction-worker.ts";
 import { SqliteJobRepository } from "./sqlite-job-repository.ts";
 
@@ -11,6 +11,8 @@ export interface ExtractionModuleOptions {
   transaction: Transaction;
   extractor: ReceiptExtractor;
   receipts: ReceiptsGateway;
+  /** The categories and tags the model may suggest; supplied by `catalog`. */
+  labels: LabelSource;
   log: WorkerLog;
 }
 
@@ -21,6 +23,7 @@ export function createExtractionModule(options: ExtractionModuleOptions) {
     jobs,
     extractor: options.extractor,
     receipts: options.receipts,
+    labels: options.labels,
     clock: options.clock,
     transaction: options.transaction,
   });

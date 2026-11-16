@@ -37,7 +37,7 @@
   background: var(--bg-page);
   color: var(--text-heading);
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   transition: border-color var(--transition);
 }
 .input::placeholder {
@@ -315,6 +315,8 @@
   background: var(--bg-page);
   color: var(--text-heading);
   font: inherit;
+  /* 16px, so iOS doesn't zoom in when it is tapped. */
+  font-size: 16px;
   resize: vertical;
 }
 
@@ -478,5 +480,13 @@
 .itemActions {
   display: flex;
   flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The Items heading, with Set all lines beside it on desktop. */
+.linesHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }

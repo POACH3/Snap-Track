@@ -35,12 +35,18 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 | `apps/server/src/modules/receipts/testing/file-store.contract.test.ts` | `FileStore` contract (put, replace, get missing, delete, refuses escaping keys, copies bytes), run against the file-system adapter and the fake; no partial files left |
 | `apps/server/src/modules/receipts/testing/image-converter.contract.test.ts` | `ImageConverter` contract (reads JPEG, PNG and HEIC sizes; HEIC to JPEG at an exact size; refuses junk), run against `sips` (macOS only) and the fake |
 | `packages/core/src/quantity.test.ts` | `toMilli` (exact thousandths) |
-| `packages/contracts/src/extraction.test.ts` | Extraction schema: everything optional, wrong types become null, amounts written as text, unreadable list entries dropped, non-objects refused |
+| `packages/contracts/src/extraction.test.ts` | Extraction schema: everything optional, wrong types become null, amounts written as text, unreadable list entries dropped, non-objects refused; category and tag numbers, also as text |
+| `packages/core/src/classification.test.ts` | `effectiveCategory` (this purchase, then this item, then the store default, else Unclassified); `lineTags` (item's apart from the line's, no repeats); `pendingSuggestion` (category only while Unclassified at every level, tags the line lacks, nothing after accept or dismiss, unusable entries never shown) |
+| `apps/server/src/modules/catalog/domain/hierarchy.test.ts` | Levels (one below the parent, at most L4); moves only under a parent one level up, never L1, children along; names unique among siblings ignoring case, L1 included; archived entries hide everything below; full paths and tree order; remove deletes only an unused entry with no children |
+| `apps/server/src/modules/catalog/application/label-catalog.test.ts` | Adding at each level and refusing L5; sibling names unique (rename too); moving with children; parents listed before children; tag names unique ignoring case and an unused tag deleted (real SQLite) |
+| `apps/server/src/modules/catalog/adapters/labels-migration.test.ts` | Migration 0006 adds the twelve default L1 categories in order; a second L1 with the same name (any case) is refused |
+| `apps/server/src/modules/receipts/application/labels.test.ts` | Part 3 use cases on real SQLite with the real catalog module: a store default of Groceries covers every line and the model's differing guess stays silent; "for this item" applies on its next purchase from any store; "this purchase only" changes nothing else and wins over the item; a new item gets the category and tags chosen for it; Set all lines; removed ids dropped; a suggestion has no effect until accepted, accepted and dismissed recorded; item tags on every purchase, purchase tags only there, purchase counts; removing deletes an unused entry and archives a used one (by a line, an item or a store default) or one with children, which are hidden too, and restore |
 | `apps/server/src/modules/receipts/domain/extraction-rules.test.ts` | Model reply to stored rows (cents, thousandths, units, dates, last four digits, store evidence); usable-amount rule; every consistency check firing and staying quiet |
 | `apps/server/src/modules/extraction/domain/extraction-rules.test.ts` | Reading the model's JSON (code fences, extra text, refusals); outcome rules: save, wait (default and suggested times, bounds), back-off 1-2-4-8 min, five attempts, one retry for invalid output |
-| `apps/server/src/modules/extraction/application/extraction-service.test.ts` | Upload queues a job in the same transaction; typical receipt reaches `unreviewed` with lines, evidence, payments, transcription; long receipt sent as one request in order; unreadable → `review_required`; no amounts → `review_required`; missing photos; offline, busy, reserved, interrupted never use attempts; five failures; exceptions count; stop puts the job back; restart mid-job resumes (real SQLite and receipts module, scripted extractor) |
+| `apps/server/src/modules/extraction/application/extraction-service.test.ts` | The model is offered the numbered hierarchy and tags and its guesses are saved as ids; upload queues a job in the same transaction; typical receipt reaches `unreviewed` with lines, evidence, payments, transcription; long receipt sent as one request in order; unreadable → `review_required`; no amounts → `review_required`; missing photos; offline, busy, reserved, interrupted never use attempts; five failures; exceptions count; stop puts the job back; restart mid-job resumes (real SQLite and receipts module, scripted extractor) |
 | `apps/server/src/modules/extraction/adapters/relay-extractor.test.ts` | Relay adapter against a stub HTTP server: request headers, settings and images in order; output; keep-alive spaces; 200 without choices; reserved and busy with `Retry-After`; 502 and connection refused; other statuses; time limit; cancel; `Retry-After` parsing |
-| `apps/server/src/modules/extraction/adapters/prompt.test.ts` | The prompt's JSON template names exactly the schema's fields |
+| `apps/server/src/modules/extraction/adapters/prompt.test.ts` | The prompt's JSON template names exactly the schema's fields; the user message lists the numbered hierarchy (full paths) and tags, or "(none)" |
+| `apps/server/src/modules/extraction/domain/labels.test.ts` | Numbering the hierarchy and tags from 1; the model's numbers mapped back to ids line by line; numbers not on the lists dropped |
 | `apps/server/src/modules/extraction/adapters/sqlite-job-repository.test.ts` | One job per receipt; claim order and due times; failed attempts recorded only when told; running jobs reset; finished jobs never claimed |
 | `apps/server/src/modules/extraction/adapters/extraction-worker.test.ts` | Worker reads an upload at once, picks up queued receipts at start, stops promptly |
 | `apps/server/src/modules/extraction/adapters/backfill-migration.test.ts` | Migration 0003 queues a job for each receipt uploaded before extraction existed |
@@ -57,6 +63,8 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 | `apps/web/src/shared/ui/zoom.test.ts` | Image viewer geometry: the pinch point stays still, 1×–5× limits, no gaps at the edges, a long receipt scrolls at fit width, narrow content centered |
 | `apps/web/src/features/receipts/receipt-form.test.ts` | Amounts and quantities as typed; the form round-trips a draft; field errors named and nothing sent; card digits; empty rows dropped; split; warnings placed by field |
 | `apps/web/src/features/receipts/receipt-format.test.ts` | Printed dates with and without a time, the capture-time fallback, payment names |
+| `apps/web/src/features/labels/labels.test.ts` | Full paths; archived entries hidden with everything below; children by parent; ancestors top first |
+| `apps/web/e2e/labels.spec.ts` | Playwright: desktop — Unclassified lines show the model's guesses; Accept applies to a line with no item at once, Dismiss leaves it Unclassified; "What do you usually buy here?" opens the tree, a class added under Groceries and set as the default covers every line with no suggestion shown; Set all lines; Library › Labels adds a category and removes it (deleted, as nothing uses it) and adds a tag with its count. Phone — a line's chip opens the hierarchy with This item chosen first, and the page still never scrolls |
 | `apps/web/e2e/review.spec.ts` | Playwright: desktop — create a store on a first receipt, confirm, the row expands into the digital receipt, View receipt image opens it read-only beside the photo, a second location sharing the website is matched, Library › Stores lists the learned identifiers; a line's item named with Use it shows on the next receipt by its code, and renaming it in Library › Items shows at once; a review-required receipt typed in by hand, total required, leaving with changes asks first. Phone — no tab bar on the receipt page; the edit card and photo both on screen; store page, then items and totals; a warning clears when the line is fixed; confirm |
 | `apps/server/src/testing/api-protection.test.ts` | Walks the whole contract: every non-public procedure refuses requests without a valid session |
 | `tooling/boundaries.test.ts` | Each boundary rule fires on its deliberate violation in `tooling/boundary-fixtures/` |
@@ -74,8 +82,12 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
   (plays back replies, records requests) and `output()`. `createTestApp()` uses one with no
   replies and doesn't start the worker; the e2e server doesn't start it either.
 - `apps/web/e2e/fixtures/`: three small JPEGs of different widths and one HEIC, made with
-  `makeRealImage()`; and `review-a.jpg` (720 px wide), `review-b.jpg` (760), `review-phone.jpg` (880)
-  and `review-unreadable.jpg` (840), whose widths pick their replies.
+  `makeRealImage()`; and `review-a.jpg` (720 px wide), `review-b.jpg` (760), `review-phone.jpg` (880),
+  `review-unreadable.jpg` (840) and `labels.jpg` (900, `review-a.jpg` resized with `sips`), whose
+  widths pick their replies.
+- `apps/server/src/modules/catalog/testing/unused-labels.ts`: `unusedLabels`, a `PurchaseLabelUsage`
+  for catalog-only tests (no purchase uses anything). Receipts tests use the real
+  `SqlitePurchaseLabelUsage`.
 - `apps/server/src/testing/e2e-extractor.ts`: `E2eExtractor`, the e2e server's stand-in for the LLM
   server: reads the first photo's width and replies with the recorded receipt for it (`E2E_REPLIES`);
   any other photo gets an unknown store and a total. Never used outside tests.
@@ -92,6 +104,8 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 - Pinch-zoom, pan and double-tap on a real iPhone and Android phone (Playwright can't pinch);
   checked by hand (`docs/feature-plans/store-review-plan.md`).
 - The real LLM server: one manual request with the owner's go-ahead (`docs/feature-plans/extraction-plan.md`).
+  Whether it suggests sensible categories and tags for a real receipt is checked the same way
+  (`docs/feature-plans/categories-and-tags-plan.md`).
 - Login screen in Playwright: used by every end-to-end test, but its error cases are not.
 - `pnpm user:create` / `user:set-password` prompts: checked by hand with piped input against a scratch database.
 - Host setup, firewall, Tailscale and deploy (Stage 0 steps 9–11): manual checks,

@@ -63,6 +63,12 @@ const draft: ReceiptDetail["draft"] = {
       item: null,
       itemRef: null,
       itemSuggestion: { kind: "new", name: "Bananas" },
+      categoryId: null,
+      tagIds: ["00000000-0000-4000-8000-0000000000aa"],
+      suggestionOutcome: null,
+      category: null,
+      suggestedCategoryId: null,
+      suggestedTagIds: [],
     },
   ],
 };
@@ -116,6 +122,9 @@ describe("the form and the draft", () => {
           lineTotalCents: line.lineTotalCents,
           discountCents: line.discountCents,
           taxCode: line.taxCode,
+          categoryId: line.categoryId,
+          tagIds: line.tagIds,
+          suggestionOutcome: line.suggestionOutcome,
         })),
       },
     });

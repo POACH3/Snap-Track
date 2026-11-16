@@ -1,5 +1,6 @@
 // The instructions sent with every receipt (SPEC.md §6.3.2). The JSON template lists every field
 // of `ExtractedReceipt`; prompt.test.ts fails if the two drift apart.
+import type { NumberedLabels } from "../domain/labels.ts";
 
 /** Every field the model may fill in, with a hint of its form. */
 export const RESPONSE_TEMPLATE = {
@@ -49,6 +50,8 @@ export const RESPONSE_TEMPLATE = {
       taxCode: "tax letter or code printed next to the line",
       kind: "item or fee",
       suggestedName: "a short readable name for the item",
+      category: 0,
+      tags: [0],
     },
   ],
   rawText: "the whole receipt, every line, word for word",
@@ -68,12 +71,17 @@ Rules:
 - Payments: "last4" holds only the last four card digits. "amount" is what was applied to this purchase (for cash, the amount after change).
 - "rawText" is a word-for-word transcription of the entire receipt, every line, exactly as printed, with nothing removed or masked.
 - When there are several photos, they are consecutive parts of one long receipt, top first. Return one receipt, with every line once.
+- "category" and "tags" are your suggestions, from the numbered lists in the message. "category" is the number of the most specific category the item clearly belongs to (a broader one when unsure); leave it out if none fits. "tags" are the numbers of any tags that clearly fit; leave it out if none does. Never use a number that is not on the lists.
 
 Reply with only the JSON object, no other text. Its fields:
 ${JSON.stringify(RESPONSE_TEMPLATE, null, 2)}`;
 
-export function userText(imageCount: number): string {
-  return imageCount === 1
-    ? "Here is the receipt."
-    : `These ${imageCount} photos are consecutive parts of one receipt, top of the receipt first.`;
+/** The user message: what the photos are, then the numbered categories and tags to suggest from. */
+export function userText(imageCount: number, labels: NumberedLabels): string {
+  const photos =
+    imageCount === 1
+      ? "Here is the receipt."
+      : `These ${imageCount} photos are consecutive parts of one receipt, top of the receipt first.`;
+  const list = (lines: readonly string[]) => (lines.length === 0 ? "(none)" : lines.join("\n"));
+  return `${photos}\n\nCategories:\n${list(labels.categoryLines)}\n\nTags:\n${list(labels.tagLines)}`;
 }

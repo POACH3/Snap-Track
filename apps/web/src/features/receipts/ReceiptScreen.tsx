@@ -21,6 +21,7 @@ import { Loader } from "../../shared/ui/Loader.tsx";
 import { Modal } from "../../shared/ui/Modal.tsx";
 import { useToast } from "../../shared/ui/toast-context.ts";
 import { ReceiptFields, type Update } from "./ReceiptFields.tsx";
+import { SetAllLines } from "./LineLabels.tsx";
 import {
   draftFromForm,
   formFromDraft,
@@ -301,6 +302,8 @@ function Review({ latest }: { latest: ReceiptDetail }) {
         warnings={warnings}
         wide={wide}
         rawText={receipt.rawText}
+        store={store?.kind === "existing" ? store.store : null}
+        editing={editing}
       />
     </fieldset>
   );
@@ -409,7 +412,7 @@ function Review({ latest }: { latest: ReceiptDetail }) {
                     <h1 id="edit-heading" className={styles.cardTitle}>
                       {editing ? "Items & totals" : (chosenName ?? "Receipt")}
                     </h1>
-                    {editing && <span className={styles.meta}>2 of 2</span>}
+                    {editing && <SetAllLines update={update} count={form.lines.length} />}
                   </div>
                   <p className={styles.meta}>
                     {editing ? chosenName : (matchText(receipt) ?? STATUS_LABEL[receipt.status])}
@@ -425,6 +428,7 @@ function Review({ latest }: { latest: ReceiptDetail }) {
                         >
                           Change store
                         </button>
+                        {" · 2 of 2"}
                       </>
                     )}
                   </p>

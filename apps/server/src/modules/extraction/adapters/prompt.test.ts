@@ -30,8 +30,23 @@ describe("prompt", () => {
     expect(SYSTEM_PROMPT).toContain("consecutive parts of one long receipt");
   });
 
+  const none = { categoryLines: [], tagLines: [], categoryIds: [], tagIds: [] };
+
   it("tells the model when several photos make one receipt", () => {
-    expect(userText(1)).toBe("Here is the receipt.");
-    expect(userText(3)).toContain("These 3 photos are consecutive parts of one receipt");
+    expect(userText(1, none)).toMatch(/^Here is the receipt\./);
+    expect(userText(3, none)).toContain("These 3 photos are consecutive parts of one receipt");
+  });
+
+  it("lists the numbered hierarchy and tags to suggest from", () => {
+    const text = userText(1, {
+      categoryLines: ["1: Groceries", "2: Groceries › Frozen foods › Ice cream"],
+      tagLines: ["1: breakfast"],
+      categoryIds: ["a", "b"],
+      tagIds: ["t"],
+    });
+    expect(text).toContain("Categories:\n1: Groceries\n2: Groceries › Frozen foods › Ice cream");
+    expect(text).toContain("Tags:\n1: breakfast");
+    expect(userText(1, none)).toContain("Tags:\n(none)");
+    expect(SYSTEM_PROMPT).toContain("Never use a number that is not on the lists");
   });
 });

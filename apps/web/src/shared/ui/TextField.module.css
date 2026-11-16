@@ -19,6 +19,8 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   font: inherit;
+  /* 16px, so iOS doesn't zoom in when it is tapped. */
+  font-size: 16px;
   transition: border-color var(--transition);
 }
 

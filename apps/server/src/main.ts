@@ -11,7 +11,12 @@ import { createAuthModule } from "./modules/auth/index.ts";
 import { createCatalogModule } from "./modules/catalog/index.ts";
 import { createExtractionModule, RelayExtractor } from "./modules/extraction/index.ts";
 import { healthRouter } from "./modules/health/index.ts";
-import { createReceiptsModule, FileSystemFileStore, SipsImageConverter } from "./modules/receipts/index.ts";
+import {
+  createReceiptsModule,
+  FileSystemFileStore,
+  SipsImageConverter,
+  SqlitePurchaseLabelUsage,
+} from "./modules/receipts/index.ts";
 
 const config = loadConfig(process.env);
 if (!config.ok) {
@@ -57,7 +62,13 @@ const auth = createAuthModule({
   secureCookies: PUBLIC_ORIGIN.startsWith("https://"),
 });
 
-const catalog = createCatalogModule({ db, clock: systemClock, transaction });
+// Catalog asks receipts how purchases use categories and tags, without depending on it (SPEC.md §4.3).
+const catalog = createCatalogModule({
+  db,
+  clock: systemClock,
+  transaction,
+  usage: new SqlitePurchaseLabelUsage(db),
+});
 
 // The service writes only under its data folder (SPEC.md §4.7), which holds IMAGE_DIR.
 mkdirSync(IMAGE_DIR, { recursive: true });
@@ -82,6 +93,7 @@ const extraction = createExtractionModule({
   clock: systemClock,
   transaction,
   receipts: receipts.service,
+  labels: catalog.service,
   extractor: new RelayExtractor({
     baseUrl: LLM_SERVER_URL,
     apiKey: LLM_SERVER_API_KEY,

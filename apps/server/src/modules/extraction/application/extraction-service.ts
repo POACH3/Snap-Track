@@ -1,12 +1,14 @@
 import type { Clock, Id, Transaction } from "@snaptrack/core";
+import { guessesFrom, numberLabels, type NumberedLabels } from "../domain/labels.ts";
 import { decideOutcome } from "../domain/outcome.ts";
 import type { ExtractorReply } from "../domain/reply.ts";
-import type { ExtractionJobRepository, ReceiptExtractor, ReceiptsGateway } from "../ports.ts";
+import type { ExtractionJobRepository, LabelSource, ReceiptExtractor, ReceiptsGateway } from "../ports.ts";
 
 export interface ExtractionDeps {
   jobs: ExtractionJobRepository;
   extractor: ReceiptExtractor;
   receipts: ReceiptsGateway;
+  labels: LabelSource;
   clock: Clock;
   transaction: Transaction;
 }
@@ -14,10 +16,14 @@ export interface ExtractionDeps {
 export type ExtractionService = ReturnType<typeof createExtractionService>;
 
 export function createExtractionService(deps: ExtractionDeps) {
-  async function ask(images: readonly Uint8Array[], signal: AbortSignal): Promise<ExtractorReply> {
+  async function ask(
+    images: readonly Uint8Array[],
+    signal: AbortSignal,
+    labels: NumberedLabels,
+  ): Promise<ExtractorReply> {
     if (signal.aborted) return { kind: "wait", reason: "cancelled", retryAfterMs: null };
     try {
-      return await deps.extractor.extract(images, signal);
+      return await deps.extractor.extract(images, signal, labels);
     } catch (error) {
       // The adapter answers expected cases itself; anything thrown is unexpected, so it counts.
       return { kind: "failure", message: error instanceof Error ? error.message : String(error) };
@@ -73,13 +79,19 @@ export function createExtractionService(deps: ExtractionDeps) {
         return "worked";
       }
 
-      const reply = await ask(images, signal);
+      // Read as the request goes out, so the numbers in the reply mean what the prompt said.
+      const labels = numberLabels(deps.labels.labelChoices());
+      const reply = await ask(images, signal, labels);
       const now = deps.clock.now();
       const outcome = decideOutcome(job, reply, now);
       deps.transaction.run(() => {
         switch (outcome.kind) {
           case "save":
-            deps.receipts.saveExtraction(job.receiptId, outcome.extracted);
+            deps.receipts.saveExtraction(
+              job.receiptId,
+              outcome.extracted,
+              guessesFrom(outcome.extracted, labels),
+            );
             deps.jobs.markDone(job.id, { model: outcome.model, rawOutput: outcome.rawOutput }, now);
             break;
           case "wait":

@@ -15,6 +15,7 @@ import { Loader } from "../../shared/ui/Loader.tsx";
 import { Pill } from "../../shared/ui/Pill.tsx";
 import { TextField } from "../../shared/ui/TextField.tsx";
 import { useToast } from "../../shared/ui/toast-context.ts";
+import { StoreDefaultCard } from "./LabelCards.tsx";
 import styles from "./Library.module.css";
 import {
   useAddIdentifier,
@@ -64,6 +65,11 @@ export function StoreScreen() {
     <div className={styles.screen}>
       {back}
       <Rename detail={query.data} />
+      <StoreDefaultCard
+        storeId={query.data.store.id}
+        storeName={query.data.store.name}
+        categoryId={query.data.defaultCategoryId}
+      />
       <Identifiers detail={query.data} />
       <AddIdentifier storeId={query.data.store.id} storeName={query.data.store.name} />
     </div>

@@ -17,7 +17,13 @@ import type {
 import type { Id, PixelSize, Result } from "@snaptrack/core";
 import type { ExtractionResult, ReceiptData } from "./domain/extracted-data.ts";
 import type { ListPosition } from "./domain/list-cursor.ts";
-import type { NewReceipt, ReceiptImage, ReceiptRecord, ReceiptWithImages } from "./domain/receipt.ts";
+import type {
+  LineGuess,
+  NewReceipt,
+  ReceiptImage,
+  ReceiptRecord,
+  ReceiptWithImages,
+} from "./domain/receipt.ts";
 import type { ReviewedLine } from "./domain/review.ts";
 
 /** The store a receipt is set to, and how. */
@@ -63,6 +69,7 @@ export interface ReceiptRepository {
     status: ReceiptStatus,
     store: ReceiptStore | undefined,
     itemIds: readonly (Id | null)[],
+    guesses: readonly LineGuess[],
   ): void;
   /**
    * Saves a review and marks the receipt confirmed. Lines with an id the receipt has are updated
@@ -129,7 +136,17 @@ export interface Catalog {
     storeId: Id | null,
     lines: readonly (LineForItems & { suggestedName: string | null })[],
   ): (LineItemSuggestion | null)[];
-  createItem(name: string, nameSource: ItemNameSource): ItemRef;
+  createItem(
+    name: string,
+    nameSource: ItemNameSource,
+    labels?: { categoryId: Id | null; tagIds: readonly Id[] },
+  ): ItemRef;
+  /** Each item's category and tags (SPEC.md §5). */
+  itemLabels(ids: readonly Id[]): Map<Id, { categoryId: Id | null; tagIds: readonly Id[] }>;
+  storeDefaultCategory(storeId: Id): Id | null;
+  /** Which of these hierarchy entries and tags exist; others are dropped from a confirm. */
+  knownCategoryIds(ids: readonly Id[]): Set<Id>;
+  knownTagIds(ids: readonly Id[]): Set<Id>;
   findItem(id: Id): ItemRef | undefined;
   itemRefs(ids: readonly Id[]): Map<Id, ItemRef>;
   createStore(name: string): Result<StoreRef, { kind: "name-taken" }>;

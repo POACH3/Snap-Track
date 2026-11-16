@@ -19,6 +19,8 @@ import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type { ExtractionResult, LineItem } from "../domain/extracted-data.ts";
 import type { ListPosition } from "../domain/list-cursor.ts";
 import type {
+  LineGuess,
+  LineLabels,
   NewReceipt,
   Receipt,
   ReceiptImage,
@@ -28,7 +30,7 @@ import type {
 } from "../domain/receipt.ts";
 import { EMPTY_EVIDENCE } from "../domain/review.ts";
 import type { ItemPurchase, ReceiptRepository, ReceiptStore, Review } from "../ports.ts";
-import { lineItems, receiptImages, receipts } from "./schema.ts";
+import { lineItems, lineItemTags, receiptImages, receipts } from "./schema.ts";
 
 type Db = BetterSQLite3Database;
 type ReceiptRow = typeof receipts.$inferSelect;
@@ -67,7 +69,7 @@ const toImage = (row: ImageRow): ReceiptImage => ({
   imageSha256: row.imageSha256,
 });
 
-const toLine = (row: LineRow): StoredLine => ({
+const toLine = (row: LineRow, tagIds: readonly Id[]): StoredLine => ({
   id: row.id,
   position: row.position,
   kind: row.kind,
@@ -81,11 +83,18 @@ const toLine = (row: LineRow): StoredLine => ({
   taxCode: row.taxCode,
   suggestedItemName: row.suggestedItemName,
   itemId: row.itemId,
+  lineCategoryId: row.lineCategoryId,
+  tagIds,
+  suggestionOutcome: row.suggestionOutcome,
+  suggestedCategoryId: row.suggestedCategoryId,
+  suggestedTagIds: row.suggestedTagIds ?? [],
 });
 
-/** A line's columns, apart from its id, receipt and timestamps. */
-const lineColumns = (line: Omit<LineItem, "suggestedItemName"> & { itemId: Id | null }) => ({
+/** A line's columns, apart from its id, receipt, guesses and timestamps. */
+const lineColumns = (line: Omit<LineItem, "suggestedItemName"> & LineLabels & { itemId: Id | null }) => ({
   itemId: line.itemId,
+  lineCategoryId: line.lineCategoryId,
+  suggestionOutcome: line.suggestionOutcome,
   position: line.position,
   kind: line.kind,
   rawName: line.rawName,
@@ -136,8 +145,8 @@ export class SqliteReceiptRepository implements ReceiptRepository {
       .from(lineItems)
       .where(eq(lineItems.receiptId, id))
       .orderBy(asc(lineItems.position))
-      .all()
-      .map(toLine);
+      .all();
+    const tagsByLine = this.#tagsOf(lines.map((line) => line.id));
     return {
       ...withImages,
       data: {
@@ -155,7 +164,7 @@ export class SqliteReceiptRepository implements ReceiptRepository {
         rawText: row.rawText,
         storeEvidence: row.storeEvidence ?? EMPTY_EVIDENCE,
       },
-      lines,
+      lines: lines.map((line) => toLine(line, tagsByLine.get(line.id) ?? [])),
       storeMatchedBy: row.storeMatchedBy,
       storeMatch: row.storeMatch,
       note: row.note,
@@ -225,12 +234,35 @@ export class SqliteReceiptRepository implements ReceiptRepository {
     return result.changes === 1;
   }
 
+  #tagsOf(lineIds: readonly Id[]): Map<Id, Id[]> {
+    if (lineIds.length === 0) return new Map();
+    const rows = this.#db
+      .select({ lineId: lineItemTags.lineItemId, tagId: lineItemTags.tagId })
+      .from(lineItemTags)
+      .where(inArray(lineItemTags.lineItemId, [...lineIds]))
+      .all();
+    const byLine = new Map<Id, Id[]>();
+    for (const { lineId, tagId } of rows) byLine.set(lineId, [...(byLine.get(lineId) ?? []), tagId]);
+    return byLine;
+  }
+
+  #setTags(lineId: Id, tagIds: readonly Id[]): void {
+    this.#db.delete(lineItemTags).where(eq(lineItemTags.lineItemId, lineId)).run();
+    const unique = [...new Set(tagIds)];
+    if (unique.length > 0)
+      this.#db
+        .insert(lineItemTags)
+        .values(unique.map((tagId) => ({ lineItemId: lineId, tagId })))
+        .run();
+  }
+
   saveExtraction(
     id: Id,
     result: ExtractionResult,
     status: ReceiptStatus,
     store: ReceiptStore | undefined,
     itemIds: readonly (Id | null)[],
+    guesses: readonly LineGuess[],
   ): void {
     const now = this.#clock.now().toISOString();
     this.#db
@@ -246,6 +278,8 @@ export class SqliteReceiptRepository implements ReceiptRepository {
           result.lines.map((line, index) => ({
             ...line,
             itemId: itemIds[index] ?? null,
+            suggestedCategoryId: guesses[index]?.suggestedCategoryId ?? null,
+            suggestedTagIds: [...(guesses[index]?.suggestedTagIds ?? [])],
             id: newId(),
             receiptId: id,
             createdAt: now,
@@ -296,18 +330,21 @@ export class SqliteReceiptRepository implements ReceiptRepository {
         .run();
     }
     for (const line of review.lines) {
+      let lineId: Id;
       if (line.id !== undefined && existing.has(line.id)) {
+        lineId = line.id;
         this.#db
           .update(lineItems)
           .set({ ...lineColumns(line), updatedAt: now })
           .where(eq(lineItems.id, line.id))
           .run();
       } else {
+        lineId = newId();
         this.#db
           .insert(lineItems)
           .values({
             ...lineColumns(line),
-            id: newId(),
+            id: lineId,
             receiptId: id,
             suggestedItemName: null,
             createdAt: now,
@@ -315,6 +352,7 @@ export class SqliteReceiptRepository implements ReceiptRepository {
           })
           .run();
       }
+      this.#setTags(lineId, line.tagIds);
     }
   }
 

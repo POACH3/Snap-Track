@@ -1,6 +1,7 @@
 import type { ExtractedReceipt } from "@snaptrack/contracts";
 import type { Id } from "@snaptrack/core";
 import type { ExtractionJob } from "./domain/job.ts";
+import type { LabelChoices, LineGuess, NumberedLabels } from "./domain/labels.ts";
 import type { ExtractorReply } from "./domain/reply.ts";
 
 /**
@@ -9,8 +10,20 @@ import type { ExtractorReply } from "./domain/reply.ts";
  * new adapter (SPEC.md §3.1 rule 6).
  */
 export interface ReceiptExtractor {
-  /** `images` are the receipt's photos in order, top first; all go in one request. */
-  extract(images: readonly Uint8Array[], signal: AbortSignal): Promise<ExtractorReply>;
+  /**
+   * `images` are the receipt's photos in order, top first; all go in one request. `labels` are
+   * the categories and tags the model may suggest from, numbered (SPEC.md §6.3).
+   */
+  extract(
+    images: readonly Uint8Array[],
+    signal: AbortSignal,
+    labels: NumberedLabels,
+  ): Promise<ExtractorReply>;
+}
+
+/** The categories and tags a model may suggest; supplied by `catalog`, wired in the composition root. */
+export interface LabelSource {
+  labelChoices(): LabelChoices;
 }
 
 export interface JobFailure {
@@ -43,6 +56,11 @@ export interface ExtractionJobRepository {
 export interface ReceiptsGateway {
   imagesForExtraction(receiptId: Id): Promise<Uint8Array[] | undefined>;
   setExtractionStatus(receiptId: Id, status: "extracting" | "uploaded"): void;
-  saveExtraction(receiptId: Id, extracted: ExtractedReceipt): "unreviewed" | "review_required";
+  /** `guesses`: each line's suggested category and tags, in line order. */
+  saveExtraction(
+    receiptId: Id,
+    extracted: ExtractedReceipt,
+    guesses: readonly LineGuess[],
+  ): "unreviewed" | "review_required";
   markReviewRequired(receiptId: Id): void;
 }

@@ -1,7 +1,7 @@
 # Stage 4, part 2: items
 
 **Changes SPEC.md:** §5 Data Model (`items`, `item_identifiers`), §6.4 Normalization (items), §6.5 Review (item names on lines), §6.7 Learning (items), §11 Stage 4.  
-**Status:** active (built 2026-11-15 on branch `stage-4-items`, not yet committed; the manual check below is still to do).
+**Status:** shipped (2026-11-15, branch `stage-4-items`, merged into `main`).
 
 Part 2 of the five Stage 4 plans (part 1: `store-review-plan.md`, shipped).
 Builds items and their identifiers, matching each line to an item,

@@ -1,5 +1,6 @@
 import type { IdentifierState, ItemRef, StoreIdentifierType, StoreRef } from "@snaptrack/contracts";
 import type { Id } from "@snaptrack/core";
+import type { Entry } from "./domain/hierarchy.ts";
 import type { SavedIdentifier } from "./domain/identify-store.ts";
 import type { LineIdentifier, SavedItemIdentifier } from "./domain/items.ts";
 import type { KnownStore } from "./domain/suggestions.ts";
@@ -27,6 +28,8 @@ export interface StoreRepository {
   listWithCounts(): { store: StoreRef; identifierCount: number }[];
   /** Every store with every name it goes by (its own and its saved name-like identifiers), for suggestions. */
   knownStores(): KnownStore[];
+  defaultCategoryOf(id: Id): Id | null;
+  setDefaultCategory(id: Id, categoryId: Id | null): void;
 }
 
 export interface StoreIdentifierRepository {
@@ -67,6 +70,64 @@ export interface ItemRepository {
   search(query: string, limit: number): { item: ItemRef; identifierCount: number }[];
   /** Every item's id and name, for similar-name suggestions. */
   all(): ItemRef[];
+  /** Each item's category and tags; unknown items are left out. */
+  labelsOf(ids: readonly Id[]): Map<Id, ItemLabels>;
+  setCategory(id: Id, categoryId: Id | null): void;
+  /** Replaces the item's tags. */
+  setTags(id: Id, tagIds: readonly Id[]): void;
+}
+
+export interface ItemLabels {
+  readonly categoryId: Id | null;
+  readonly tagIds: readonly Id[];
+}
+
+export interface CategoryRepository {
+  /** Every entry, archived ones included. */
+  all(): Entry[];
+  findById(id: Id): Entry | undefined;
+  /** Returns false, saving nothing, if a sibling has the name (ignoring case). */
+  insert(entry: Omit<Entry, "archived">): boolean;
+  /** Returns false if a sibling has the name. */
+  rename(id: Id, name: string): boolean;
+  /** Returns false if a sibling under the new parent has its name. Children stay attached to it. */
+  move(id: Id, parentId: Id): boolean;
+  setArchived(ids: readonly Id[], archived: boolean): void;
+  delete(id: Id): void;
+  /** One more than the largest sort order under `parentId`. */
+  nextSortOrder(parentId: Id | null): number;
+  /** An item or a store default points to it. */
+  isReferenced(id: Id): boolean;
+}
+
+export interface TagRepository {
+  /** Every tag, archived ones included, alphabetically. */
+  all(): { id: Id; name: string; archived: boolean }[];
+  findById(id: Id): { id: Id; name: string; archived: boolean } | undefined;
+  /** Returns false, saving nothing, if the name is taken (ignoring case). */
+  insert(tag: { id: Id; name: string }): boolean;
+  rename(id: Id, name: string): boolean;
+  setArchived(id: Id, archived: boolean): void;
+  delete(id: Id): void;
+  /** An item has it. */
+  isReferenced(id: Id): boolean;
+  /** Each tag's items. */
+  itemsByTag(): Map<Id, Id[]>;
+}
+
+/**
+ * How purchases use categories and tags, which `catalog` can't read itself: the rows belong to
+ * `receipts` (SPEC.md §4.3). Supplied by `receipts`, wired in the composition root. Synchronous.
+ */
+export interface PurchaseLabelUsage {
+  /** A line has it as its own category. */
+  categoryInUse(categoryId: Id): boolean;
+  /** A line has it as its own tag. */
+  tagInUse(tagId: Id): boolean;
+  /** How many purchases (lines on receipts that count) each item has. */
+  purchasesPerItem(): Map<Id, number>;
+  /** Every tag set on a counted line, with the line's id and item. */
+  lineTags(): { tagId: Id; lineId: Id; itemId: Id | null }[];
 }
 
 export interface ItemIdentifierRepository {

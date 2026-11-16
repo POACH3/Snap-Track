@@ -285,3 +285,38 @@ describe("restarts", () => {
     expect(status(id)).toBe("unreviewed");
   });
 });
+
+describe("category and tag suggestions", () => {
+  it("offers the model the numbered hierarchy and tags, and saves its guesses as ids", async () => {
+    const dairy = t.catalog.service.addCategory("Dairy", groceriesId());
+    const tag = t.catalog.service.addTag("breakfast");
+    if (!dairy.ok || !tag.ok) throw new Error("setup failed");
+    const id = await upload();
+    const labels = t.catalog.service.labelChoices();
+    const dairyNumber = labels.categories.findIndex((c) => c.id === dairy.value.id) + 1;
+    extractor.then(
+      output({
+        ...GROCERY,
+        lines: [
+          { printedName: "MILK 2% GAL", amount: 3.49, category: dairyNumber, tags: [1] },
+          { printedName: "BANANAS", amount: 1.36, category: 999, tags: [7] },
+        ],
+      }),
+    );
+    await run();
+
+    expect(extractor.labels[0]?.categoryLines).toContain(`${dairyNumber}: Groceries › Dairy`);
+    expect(extractor.labels[0]?.tagLines).toEqual(["1: breakfast"]);
+    const lines = t.receipts.service.getReceipt(id)?.draft.lines;
+    expect(lines?.map((line) => [line.suggestedCategoryId, line.suggestedTagIds, line.category])).toEqual([
+      [dairy.value.id, [tag.value.id], null],
+      [null, [], null],
+    ]);
+  });
+});
+
+function groceriesId(): string {
+  const found = t.catalog.service.listCategories().find((c) => c.name === "Groceries");
+  if (found === undefined) throw new Error("no Groceries");
+  return found.id;
+}

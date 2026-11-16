@@ -11,7 +11,16 @@ import type {
   StoreChoice,
   StoreRef,
 } from "@snaptrack/contracts";
-import { err, newId, ok, sha256Hex, type Id, type Result, type Transaction } from "@snaptrack/core";
+import {
+  effectiveCategory,
+  err,
+  newId,
+  ok,
+  sha256Hex,
+  type Id,
+  type Result,
+  type Transaction,
+} from "@snaptrack/core";
 import { checkConsistency } from "../domain/consistency.ts";
 import { fromExtraction, hasUsableAmounts } from "../domain/extracted-data.ts";
 import { detectImageFormat } from "../domain/image-format.ts";
@@ -20,6 +29,7 @@ import { planStoredImage, thumbnailSize } from "../domain/image-plan.ts";
 import { decodeCursor, encodeCursor, normalizeTimestamp } from "../domain/list-cursor.ts";
 import {
   EXTRACTION_STATUSES,
+  type LineGuess,
   type ReceiptImage,
   type ReceiptRecord,
   type ReceiptWithImages,
@@ -156,7 +166,21 @@ export function createReceiptsService(deps: ReceiptsDeps) {
       open.map((line) => ({ ...line, suggestedName: line.suggestedItemName })),
     );
     const suggestions = new Map(open.map((line, index) => [line.id, offered[index] ?? null]));
-    const draft = draftOf(record.data, record.note, record.lines, items, suggestions);
+    // Each line's category as saved, worked out now (SPEC.md §5, Classification rules).
+    const itemLabels = deps.catalog.itemLabels([...items.keys()]);
+    const storeDefault =
+      record.receipt.storeId === null ? null : deps.catalog.storeDefaultCategory(record.receipt.storeId);
+    const categories = new Map(
+      record.lines.map((line) => [
+        line.id,
+        effectiveCategory({
+          line: line.lineCategoryId,
+          item: line.itemId === null ? null : (itemLabels.get(line.itemId)?.categoryId ?? null),
+          store: storeDefault,
+        }),
+      ]),
+    );
+    const draft = draftOf(record.data, record.note, record.lines, items, suggestions, categories);
     return {
       ...summary,
       updatedAt: record.updatedAt,
@@ -190,15 +214,35 @@ export function createReceiptsService(deps: ReceiptsDeps) {
    */
   function resolveItems(record: ReceiptRecord, draft: ReceiptDraft, storeId: Id): ReviewedLine[] {
     const stored = new Map(record.lines.map((line) => [line.id, line]));
-    const lines = linesFromDraft(draft.lines).map((line, index) => {
-      const choice = draft.lines[index]?.item ?? null;
+    // Categories and tags that no longer exist (removed meanwhile) are dropped.
+    const choices = draft.lines.map((line) => line.item);
+    const categories = deps.catalog.knownCategoryIds([
+      ...draft.lines.flatMap((line) => (line.categoryId === null ? [] : [line.categoryId])),
+      ...choices.flatMap((c) => (c?.kind === "new" && c.categoryId !== null ? [c.categoryId] : [])),
+    ]);
+    const tags = deps.catalog.knownTagIds([
+      ...draft.lines.flatMap((line) => line.tagIds),
+      ...choices.flatMap((c) => (c?.kind === "new" ? c.tagIds : [])),
+    ]);
+    const known = (id: Id | null) => (id !== null && categories.has(id) ? id : null);
+    const lines = linesFromDraft(draft.lines).map((drafted, index) => {
+      const line = {
+        ...drafted,
+        lineCategoryId: known(drafted.lineCategoryId),
+        tagIds: drafted.tagIds.filter((id) => tags.has(id)),
+      };
+      const choice = choices[index] ?? null;
       if (choice === null) return line;
       if (choice.kind === "existing") {
         return { ...line, itemId: deps.catalog.findItem(choice.itemId)?.id ?? null };
       }
       const suggested = line.id === undefined ? null : (stored.get(line.id)?.suggestedItemName ?? null);
       const source = choice.name === suggested ? "model" : choice.name === line.rawName ? "printed" : "user";
-      return { ...line, itemId: deps.catalog.createItem(choice.name, source).id };
+      const item = deps.catalog.createItem(choice.name, source, {
+        categoryId: known(choice.categoryId),
+        tagIds: choice.tagIds.filter((id) => tags.has(id)),
+      });
+      return { ...line, itemId: item.id };
     });
     const open = lines.flatMap((line, index) => (line.itemId === null ? [index] : []));
     const found = deps.catalog.identifyLines(
@@ -501,7 +545,12 @@ export function createReceiptsService(deps: ReceiptsDeps) {
      * kept either way, to help the person who fills it in. Synchronous, so it can share a
      * transaction with the job's own update.
      */
-    saveExtraction(receiptId: Id, extracted: ExtractedReceipt): "unreviewed" | "review_required" {
+    saveExtraction(
+      receiptId: Id,
+      extracted: ExtractedReceipt,
+      /** The model's category and tag guess for each line, in order (SPEC.md §6.3). */
+      guesses: readonly LineGuess[] = [],
+    ): "unreviewed" | "review_required" {
       const result = fromExtraction(extracted);
       const status = hasUsableAmounts(result) ? "unreviewed" : "review_required";
       const current = deps.receipts.findById(receiptId)?.receipt.status;
@@ -517,6 +566,7 @@ export function createReceiptsService(deps: ReceiptsDeps) {
         status,
         found && { storeId: found.storeId, matchedBy: "identifier", match: found.match },
         items.map((item) => item?.id ?? null),
+        guesses,
       );
       return status;
     },

@@ -17,6 +17,102 @@ export function createCatalogRouter(service: CatalogService) {
         if (!result.ok) throw errors.ITEM_NOT_FOUND();
         return { item: result.value };
       }),
+
+      setCategory: os.catalog.items.setCategory.handler(({ input, errors }) => {
+        const result = service.setItemCategory(input.id, input.categoryId);
+        if (result.ok) return result.value;
+        throw result.error.kind === "item-not-found" ? errors.ITEM_NOT_FOUND() : errors.CATEGORY_NOT_FOUND();
+      }),
+
+      setTags: os.catalog.items.setTags.handler(({ input, errors }) => {
+        const result = service.setItemTags(input.id, input.tagIds);
+        if (!result.ok) throw errors.ITEM_NOT_FOUND();
+        return result.value;
+      }),
+
+      labels: os.catalog.items.labels.handler(({ input }) => ({
+        items: [...service.itemLabels(input.ids)].map(([id, labels]) => ({
+          id,
+          categoryId: labels.categoryId,
+          tagIds: [...labels.tagIds],
+        })),
+      })),
+    },
+
+    categories: {
+      list: os.catalog.categories.list.handler(() => ({ categories: service.listCategories() })),
+
+      add: os.catalog.categories.add.handler(({ input, errors }) => {
+        const result = service.addCategory(input.name, input.parentId);
+        if (result.ok) return { category: result.value };
+        switch (result.error.kind) {
+          case "parent-not-found":
+            throw errors.PARENT_NOT_FOUND();
+          case "too-deep":
+            throw errors.TOO_DEEP();
+          case "name-taken":
+            throw errors.NAME_TAKEN();
+        }
+      }),
+
+      rename: os.catalog.categories.rename.handler(({ input, errors }) => {
+        const result = service.renameCategory(input.id, input.name);
+        if (result.ok) return { category: result.value };
+        throw result.error.kind === "name-taken" ? errors.NAME_TAKEN() : errors.CATEGORY_NOT_FOUND();
+      }),
+
+      move: os.catalog.categories.move.handler(({ input, errors }) => {
+        const result = service.moveCategory(input.id, input.parentId);
+        if (result.ok) return { category: result.value };
+        switch (result.error.kind) {
+          case "category-not-found":
+            throw errors.CATEGORY_NOT_FOUND();
+          case "invalid-parent":
+            throw errors.INVALID_PARENT();
+          case "name-taken":
+            throw errors.NAME_TAKEN();
+        }
+      }),
+
+      remove: os.catalog.categories.remove.handler(({ input, errors }) => {
+        const result = service.removeCategory(input.id);
+        if (!result.ok) throw errors.CATEGORY_NOT_FOUND();
+        return { outcome: result.value };
+      }),
+
+      restore: os.catalog.categories.restore.handler(({ input, errors }) => {
+        const result = service.restoreCategory(input.id);
+        if (!result.ok) throw errors.CATEGORY_NOT_FOUND();
+        return { category: result.value };
+      }),
+    },
+
+    tags: {
+      list: os.catalog.tags.list.handler(() => ({ tags: service.listTags() })),
+
+      add: os.catalog.tags.add.handler(({ input, errors }) => {
+        const result = service.addTag(input.name);
+        if (!result.ok) throw errors.NAME_TAKEN();
+        return { tag: result.value };
+      }),
+
+      rename: os.catalog.tags.rename.handler(({ input, errors }) => {
+        const result = service.renameTag(input.id, input.name);
+        if (result.ok) return { tag: result.value };
+        throw result.error.kind === "name-taken" ? errors.NAME_TAKEN() : errors.TAG_NOT_FOUND();
+      }),
+
+      remove: os.catalog.tags.remove.handler(({ input, errors }) => {
+        const result = service.removeTag(input.id);
+        if (!result.ok) throw errors.TAG_NOT_FOUND();
+        return { outcome: result.value };
+      }),
+
+      restore: os.catalog.tags.restore.handler(({ input, errors }) => {
+        const result = service.restoreTag(input.id);
+        if (!result.ok) throw errors.TAG_NOT_FOUND();
+        return { tag: result.value };
+      }),
     },
 
     itemIdentifiers: {
@@ -51,6 +147,14 @@ export function createCatalogRouter(service: CatalogService) {
         if (!result.ok)
           throw result.error.kind === "name-taken" ? errors.STORE_NAME_TAKEN() : errors.STORE_NOT_FOUND();
         return { store: result.value };
+      }),
+
+      setDefaultCategory: os.catalog.stores.setDefaultCategory.handler(({ input, errors }) => {
+        const result = service.setStoreDefaultCategory(input.id, input.categoryId);
+        if (result.ok) return result.value;
+        throw result.error.kind === "store-not-found"
+          ? errors.STORE_NOT_FOUND()
+          : errors.CATEGORY_NOT_FOUND();
       }),
     },
 

@@ -81,6 +81,19 @@ export const E2E_REPLIES: Record<number, unknown> = {
   },
   // review-unreadable.jpg: nothing the model could read.
   840: {},
+  // labels.jpg: a store of its own, with category guesses by number from the prompt's list
+  // (1 is Groceries and 3 is Household among the default categories, in order).
+  900: {
+    store: { printedName: "LABEL MART", phones: [{ number: "(555) 010-5000" }] },
+    purchaseDate: "2026-01-13",
+    subtotal: 7.0,
+    tax: 0,
+    total: 7.0,
+    lines: [
+      { printedName: "OAT MILK", amount: 4.0, suggestedName: "Oat milk", category: 1 },
+      { printedName: "CANDLE", amount: 3.0, category: 3 },
+    ],
+  },
 };
 
 /** Any other photo (the capture tests' fixtures): an unknown store and a total. */

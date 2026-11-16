@@ -1,3 +1,4 @@
+import type { NumberedLabels } from "../domain/labels.ts";
 import type { ExtractorReply } from "../domain/reply.ts";
 import type { ReceiptExtractor } from "../ports.ts";
 import { SYSTEM_PROMPT, userText } from "./prompt.ts";
@@ -32,7 +33,11 @@ export class RelayExtractor implements ReceiptExtractor {
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
 
-  async extract(images: readonly Uint8Array[], signal: AbortSignal): Promise<ExtractorReply> {
+  async extract(
+    images: readonly Uint8Array[],
+    signal: AbortSignal,
+    labels: NumberedLabels,
+  ): Promise<ExtractorReply> {
     const timeout = AbortSignal.timeout(this.#options.timeoutMs);
     const both = AbortSignal.any([signal, timeout]);
     // Why a request didn't finish: SnapTrack stopping, the time limit, or no LLM server.
@@ -56,7 +61,7 @@ export class RelayExtractor implements ReceiptExtractor {
           // The relay's usage log names the caller from this header.
           "x-openwebui-user-name": "snaptrack",
         },
-        body: JSON.stringify(this.#request(images)),
+        body: JSON.stringify(this.#request(images, labels)),
         signal: both,
       });
       text = await response.text();
@@ -66,7 +71,7 @@ export class RelayExtractor implements ReceiptExtractor {
     return mapReply(response.status, response.headers.get("retry-after"), text);
   }
 
-  #request(images: readonly Uint8Array[]) {
+  #request(images: readonly Uint8Array[], labels: NumberedLabels) {
     return {
       model: this.#options.model,
       stream: false,
@@ -80,7 +85,7 @@ export class RelayExtractor implements ReceiptExtractor {
         {
           role: "user",
           content: [
-            { type: "text", text: userText(images.length) },
+            { type: "text", text: userText(images.length, labels) },
             ...images.map((bytes) => ({
               type: "image_url",
               image_url: { url: `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}` },

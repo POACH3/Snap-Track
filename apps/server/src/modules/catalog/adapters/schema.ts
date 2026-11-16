@@ -1,5 +1,60 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  type AnySQLiteColumn,
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
+
+/**
+ * The classification hierarchy, every level in one table (SPEC.md §5). The default L1 set is
+ * added by migration 0006.
+ */
+export const categories = sqliteTable(
+  "categories",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    /** 1–4: category, subcategory, class, class. */
+    level: integer("level").notNull(),
+    /** Exactly one level up; null for L1. */
+    parentId: text("parent_id").references((): AnySQLiteColumn => categories.id),
+    /** Chosen with the chart library in Stage 6; null until then. */
+    color: text("color"),
+    sortOrder: integer("sort_order").notNull(),
+    archived: integer("archived", { mode: "boolean" }).notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("categories_parent_name_unique").on(table.parentId, sql`${table.name} collate nocase`),
+    // SQLite treats every null as different, so L1 names need their own unique index.
+    uniqueIndex("categories_top_name_unique")
+      .on(sql`${table.name} collate nocase`)
+      .where(sql`${table.parentId} is null`),
+    index("categories_parent_idx").on(table.parentId),
+    check("categories_level_check", sql`${table.level} between 1 and 4`),
+    check("categories_parent_check", sql`(${table.level} = 1) = (${table.parentId} is null)`),
+  ],
+);
+
+/** Free tags: labels for filtering, outside the hierarchy (SPEC.md §5). */
+export const tags = sqliteTable(
+  "tags",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    color: text("color"),
+    archived: integer("archived", { mode: "boolean" }).notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("tags_name_unique").on(sql`${table.name} collate nocase`)],
+);
 
 /** Companies where money is spent (SPEC.md §5). Locations are not tracked as separate stores. */
 export const stores = sqliteTable(
@@ -8,6 +63,8 @@ export const stores = sqliteTable(
     id: text("id").primaryKey(),
     /** Unique ignoring case. */
     name: text("name").notNull(),
+    /** "What I usually buy here"; set by a person only. */
+    defaultCategoryId: text("default_category_id").references(() => categories.id),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -59,6 +116,8 @@ export const items = sqliteTable(
     /** Shown everywhere. Not unique: two products may share a name. */
     name: text("name").notNull(),
     nameSource: text("name_source", { enum: ["printed", "model", "user"] }).notNull(),
+    /** Set by a person only; applies to every purchase of the item. */
+    categoryId: text("category_id").references(() => categories.id),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -106,5 +165,22 @@ export const itemIdentifiers = sqliteTable(
       "item_identifiers_barcode_store_check",
       sql`(${table.type} = 'barcode') = (${table.storeId} is null)`,
     ),
+  ],
+);
+
+/** Tags on an item: they apply to every purchase of it (SPEC.md §5). */
+export const itemTags = sqliteTable(
+  "item_tags",
+  {
+    itemId: text("item_id")
+      .notNull()
+      .references(() => items.id),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id),
+  },
+  (table) => [
+    primaryKey({ columns: [table.itemId, table.tagId] }),
+    index("item_tags_tag_idx").on(table.tagId),
   ],
 );

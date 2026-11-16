@@ -1,0 +1,253 @@
+/* Categories and tags on the receipt page (docs/DESIGN.md, "Categories and tags"). */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chip,
+.tag,
+.addTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-heading);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.chip {
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--border-hover);
+}
+
+.chip:disabled {
+  cursor: default;
+}
+
+.source {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* A tag on this purchase only: no fill, dashed muted border. */
+.purchaseTag {
+  background: none;
+  border: 1px dashed var(--text-muted);
+}
+
+.addTag {
+  gap: 4px;
+  background: none;
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+/* Nothing to add while the receipt is only being looked at. */
+.addTag:disabled {
+  display: none;
+}
+
+.suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.suggestion strong {
+  color: var(--text-body);
+  font-weight: 600;
+}
+
+.suggestionActions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.accept,
+.dismiss {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.accept {
+  border: 1px solid var(--accent-tint-border);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.dismiss {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-body);
+  font-weight: 500;
+}
+
+.accept:disabled,
+.dismiss:disabled {
+  display: none;
+}
+
+.acceptText {
+  margin: 0 0 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+/* "What do you usually buy here?" */
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-tint-border);
+  border-radius: var(--radius-control);
+  background: var(--accent-tint);
+}
+
+.questionTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.questionText {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-body);
+}
+
+.questionActions {
+  display: flex;
+  gap: 8px;
+}
+
+.small {
+  min-height: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.setAll {
+  flex: none;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-body);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.setAll:hover {
+  border-color: var(--border-hover);
+}
+
+/* Tags in the line's sheet. */
+.tagsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.subhead {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.groupLabel {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toggle {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-heading);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.toggle[aria-pressed="true"] {
+  border-color: var(--accent-tint-border);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+
+.newTag {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.input {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-page);
+  color: var(--text-heading);
+  font: inherit;
+  font-size: 16px;
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

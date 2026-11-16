@@ -4,8 +4,8 @@ import styles from "./Library.module.css";
 import { useStoreList } from "./use-stores.ts";
 
 /**
- * What the household has set and the app learns from, all editable (SPEC.md §6.5): stores and
- * items now; labels (categories, classes and tags) in Stage 4 part 3.
+ * What the household has set and the app learns from, all editable (SPEC.md §6.5): stores,
+ * items, and labels (categories, classes and tags).
  */
 export function LibraryScreen() {
   const stores = useStoreList();
@@ -40,12 +40,15 @@ export function LibraryScreen() {
             <ChevronRight size={18} aria-hidden className={styles.chevron} />
           </Link>
         </li>
-        <li className={`${styles.row} ${styles.later}`}>
-          <Tags size={20} aria-hidden className={styles.icon} />
-          <span className={styles.text}>
-            <span className={styles.name}>Labels</span>
-            <span className={styles.detail}>Categories, classes and tags. Coming soon.</span>
-          </span>
+        <li>
+          <Link to="/library/labels" className={`${styles.row} ${styles.link}`}>
+            <Tags size={20} aria-hidden className={styles.icon} />
+            <span className={styles.text}>
+              <span className={styles.name}>Labels</span>
+              <span className={styles.detail}>Categories, classes and tags</span>
+            </span>
+            <ChevronRight size={18} aria-hidden className={styles.chevron} />
+          </Link>
         </li>
       </ul>
     </div>

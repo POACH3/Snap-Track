@@ -1,4 +1,5 @@
 // Use-case tests (SPEC.md §3.5): real SQLite in memory, fakes for files, images and clock.
+import { SqlitePurchaseLabelUsage } from "../adapters/sqlite-purchase-label-usage.ts";
 import { newId } from "@snaptrack/core";
 import { FakeClock } from "@snaptrack/core/testing";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -39,7 +40,12 @@ beforeEach(() => {
     files,
     converter,
     users,
-    catalog: createCatalogModule({ db: toDrizzle(sqlite), clock, transaction }).service,
+    catalog: createCatalogModule({
+      db: toDrizzle(sqlite),
+      clock,
+      transaction,
+      usage: new SqlitePurchaseLabelUsage(toDrizzle(sqlite)),
+    }).service,
     transaction,
   });
 });

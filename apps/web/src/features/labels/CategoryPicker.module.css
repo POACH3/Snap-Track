@@ -1,0 +1,235 @@
+/* The category picker (docs/DESIGN.md, "Category picker"). */
+.subtitle {
+  margin: -6px 0 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tools {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.filter {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-page);
+  color: var(--text-heading);
+  font: inherit;
+  /* 16px, so iOS doesn't zoom in when it is tapped. */
+  font-size: 16px;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+.filterInput {
+  padding-left: 42px;
+}
+
+/* The tree scrolls inside the sheet; the filter, scope and buttons stay put. */
+.tree {
+  max-height: min(48dvh, 420px);
+  overflow: auto;
+  margin: 0 0 14px;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-page);
+}
+
+.rowItem {
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding-right: 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.chosen {
+  background: var(--accent-tint);
+  border-color: var(--accent-tint-border);
+}
+
+.chevron,
+.chevronSpace {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 36px;
+}
+
+.chevron {
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chevron:hover {
+  background: var(--surface-raised);
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 40px;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-heading);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.top,
+.chosen .name {
+  font-weight: 600;
+}
+
+.nameText {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.check {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.addRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  margin: 2px 0;
+  padding: 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--text-body);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.addRow:hover {
+  border-color: var(--border-hover);
+}
+
+.addForm {
+  display: flex;
+  gap: 8px;
+  padding: 4px 4px 4px 0;
+}
+
+.muted {
+  padding: 10px 12px;
+  color: var(--text-muted);
+}
+
+.scope {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+
+.legend {
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.radio input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.radio > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.radioTitle {
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.radioHint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Clear sits on the left, apart from Cancel and the main button. */
+.clear {
+  margin-right: auto;
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

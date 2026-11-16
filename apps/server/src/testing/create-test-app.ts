@@ -8,7 +8,12 @@ import { FakePasswordHasher } from "../modules/auth/testing/fake-password-hasher
 import { createExtractionModule, type ReceiptExtractor } from "../modules/extraction/index.ts";
 import { ScriptedExtractor } from "../modules/extraction/testing/scripted-extractor.ts";
 import { healthRouter } from "../modules/health/index.ts";
-import { createReceiptsModule, type FileStore, type ImageConverter } from "../modules/receipts/index.ts";
+import {
+  createReceiptsModule,
+  SqlitePurchaseLabelUsage,
+  type FileStore,
+  type ImageConverter,
+} from "../modules/receipts/index.ts";
 import { FakeImageConverter } from "../modules/receipts/testing/fake-image-converter.ts";
 import { InMemoryFileStore } from "../modules/receipts/testing/in-memory-file-store.ts";
 import { toDrizzle } from "../platform/db/connection.ts";
@@ -47,7 +52,7 @@ export function createTestApp(options: TestAppOptions = {}) {
     secureCookies: options.secureCookies ?? false,
     hasher: new FakePasswordHasher(),
   });
-  const catalog = createCatalogModule({ db, clock, transaction });
+  const catalog = createCatalogModule({ db, clock, transaction, usage: new SqlitePurchaseLabelUsage(db) });
   const files = options.files ?? new InMemoryFileStore();
   const receipts = createReceiptsModule({
     db,
@@ -68,6 +73,7 @@ export function createTestApp(options: TestAppOptions = {}) {
     clock,
     transaction,
     receipts: receipts.service,
+    labels: catalog.service,
     extractor: options.extractor ?? new ScriptedExtractor(),
     log: { info: () => undefined, error: () => undefined },
   });

@@ -1,0 +1,209 @@
+/* Library › Labels (docs/DESIGN.md, "Library › Labels"). */
+.heading {
+  margin: -8px 0 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 8px;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-heading);
+}
+
+.pillButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-heading);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pillButton:hover {
+  border-color: var(--border-hover);
+}
+
+.tree {
+  margin: 0;
+  padding: 0 0 6px;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding-right: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--text-heading);
+}
+
+.archived {
+  color: var(--text-muted);
+}
+
+.chevron {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+}
+
+button.chevron {
+  cursor: pointer;
+}
+
+button.chevron:hover {
+  background: var(--surface-raised);
+}
+
+.entryName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top {
+  font-weight: 600;
+}
+
+.level {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.more {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.more:hover {
+  background: var(--surface-raised);
+  color: var(--text-heading);
+}
+
+.note {
+  margin: 0;
+  padding: 8px 16px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tagsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-heading);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tag.archived {
+  color: var(--text-muted);
+}
+
+.count {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.path {
+  margin: -6px 0 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+}
+
+.optionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+/* A tag toggled on for an item. */
+.tag[aria-pressed="true"] {
+  border-color: var(--accent-tint-border);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}

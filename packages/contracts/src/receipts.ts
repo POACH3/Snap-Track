@@ -13,6 +13,7 @@ import {
   StoreSuggestion,
 } from "./catalog.ts";
 import { LineUnit, Payment, StoreEvidence, TaxLine, TransactionNumber } from "./extraction.ts";
+import { LineCategory } from "./labels.ts";
 import { procedure } from "./procedure.ts";
 
 /** A receipt's place in its lifecycle (SPEC.md §5, `receipts.status`). */
@@ -58,11 +59,19 @@ const cents = z.number().int().min(-MAX_CENTS).max(MAX_CENTS);
 const shortText = (max: number) => z.string().trim().max(max);
 const optionalText = (max: number) => shortText(max).nullable();
 
-/** A line as the review form edits it. Its position is its place in the list. */
+const MAX_LINE_TAGS = 50;
+const tagIds = z.array(z.uuid()).max(MAX_LINE_TAGS);
+
 /** A line's item: one already known, or a new one created with the confirm (SPEC.md §6.7). */
 export const LineItemChoice = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("existing"), itemId: z.uuid() }),
-  z.object({ kind: z.literal("new"), name: ItemName }),
+  z.object({
+    kind: z.literal("new"),
+    name: ItemName,
+    /** "This item" chosen before the item exists: given to it when the confirm creates it. */
+    categoryId: z.uuid().nullable().default(null),
+    tagIds: tagIds.default([]),
+  }),
 ]);
 export type LineItemChoice = z.infer<typeof LineItemChoice>;
 
@@ -75,6 +84,11 @@ export const LineItemSuggestion = z.discriminatedUnion("kind", [
 ]);
 export type LineItemSuggestion = z.infer<typeof LineItemSuggestion>;
 
+/** What a person did with the software's category and tag guess for a line (SPEC.md §6.7). */
+export const SuggestionOutcome = z.enum(["accepted", "dismissed"]);
+export type SuggestionOutcome = z.infer<typeof SuggestionOutcome>;
+
+/** A line as the review form edits it. Its position is its place in the list. */
 export const DraftLine = z.object({
   /** Present for a line the receipt already has, so what is attached to it is kept. */
   id: z.uuid().optional(),
@@ -92,6 +106,11 @@ export const DraftLine = z.object({
   /** Savings on this line, already included in the line total. */
   discountCents: cents.nullable(),
   taxCode: optionalText(20),
+  /** "This purchase only": a category set on this line alone (SPEC.md §5). */
+  categoryId: z.uuid().nullable().default(null),
+  /** Tags on this purchase only; its item's tags are the item's. */
+  tagIds: tagIds.default([]),
+  suggestionOutcome: SuggestionOutcome.nullable().default(null),
 });
 export type DraftLine = z.infer<typeof DraftLine>;
 
@@ -198,6 +217,11 @@ export const ReceiptDetail = ReceiptSummary.extend({
         itemRef: ItemRef.nullable(),
         /** For a line with no item: what to offer. */
         itemSuggestion: LineItemSuggestion.nullable(),
+        /** The line's category as saved, worked out now; null when Unclassified. */
+        category: LineCategory.nullable(),
+        /** The model's guess; shown only as the rules allow (`pendingSuggestion`). */
+        suggestedCategoryId: z.uuid().nullable(),
+        suggestedTagIds: z.array(z.uuid()),
       }),
     ),
   }),

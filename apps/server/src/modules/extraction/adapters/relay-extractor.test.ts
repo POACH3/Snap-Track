@@ -5,6 +5,8 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { RelayExtractor, retryAfterMs } from "./relay-extractor.ts";
 
+const NO_LABELS = { categoryLines: [], tagLines: [], categoryIds: [], tagIds: [] };
+
 type Handler = (request: IncomingMessage, body: string, response: ServerResponse) => void;
 
 const servers: Server[] = [];
@@ -70,7 +72,7 @@ describe("RelayExtractor", () => {
       };
       json(response, 200, completion("{}"));
     });
-    await extractor(url).extract(images, signal());
+    await extractor(url).extract(images, signal(), NO_LABELS);
 
     expect(seen?.path).toBe("/v1/chat/completions");
     expect(seen?.headers).toMatchObject({
@@ -100,7 +102,7 @@ describe("RelayExtractor", () => {
     const url = await relay((_req, _body, res) => {
       json(res, 200, completion('{"total": 5}'));
     });
-    expect(await extractor(url).extract(images, signal())).toEqual({
+    expect(await extractor(url).extract(images, signal(), NO_LABELS)).toEqual({
       kind: "output",
       content: '{"total": 5}',
       model: "Qwen3.6-35B-A3B-4bit",
@@ -113,7 +115,7 @@ describe("RelayExtractor", () => {
       res.write("   ");
       res.end(JSON.stringify(completion('{"total": 5}')));
     });
-    expect(await extractor(url).extract(images, signal())).toMatchObject({
+    expect(await extractor(url).extract(images, signal(), NO_LABELS)).toMatchObject({
       kind: "output",
       content: '{"total": 5}',
     });
@@ -124,7 +126,7 @@ describe("RelayExtractor", () => {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(`  ${JSON.stringify({ error: { message: "out of memory" } })}`);
     });
-    const reply = await extractor(url).extract(images, signal());
+    const reply = await extractor(url).extract(images, signal(), NO_LABELS);
     expect(reply).toMatchObject({ kind: "failure" });
     expect(reply.kind === "failure" && reply.message).toContain("out of memory");
   });
@@ -138,7 +140,7 @@ describe("RelayExtractor", () => {
         { "retry-after": "300" },
       );
     });
-    expect(await extractor(url).extract(images, signal())).toEqual({
+    expect(await extractor(url).extract(images, signal(), NO_LABELS)).toEqual({
       kind: "wait",
       reason: "reserved",
       retryAfterMs: 300_000,
@@ -154,7 +156,7 @@ describe("RelayExtractor", () => {
         { "retry-after": "30" },
       );
     });
-    expect(await extractor(url).extract(images, signal())).toEqual({
+    expect(await extractor(url).extract(images, signal(), NO_LABELS)).toEqual({
       kind: "wait",
       reason: "busy",
       retryAfterMs: 30_000,
@@ -165,12 +167,12 @@ describe("RelayExtractor", () => {
     const url = await relay((_req, _body, res) => {
       json(res, 502, { error: { message: "The model server is not running." } });
     });
-    expect(await extractor(url).extract(images, signal())).toEqual({
+    expect(await extractor(url).extract(images, signal(), NO_LABELS)).toEqual({
       kind: "wait",
       reason: "offline",
       retryAfterMs: null,
     });
-    expect(await extractor("http://127.0.0.1:1").extract(images, signal())).toEqual({
+    expect(await extractor("http://127.0.0.1:1").extract(images, signal(), NO_LABELS)).toEqual({
       kind: "wait",
       reason: "offline",
       retryAfterMs: null,
@@ -186,7 +188,7 @@ describe("RelayExtractor", () => {
       const url = await relay((_req, _body, res) => {
         json(res, status, body);
       });
-      expect(await extractor(url).extract(images, signal())).toMatchObject({ kind: "failure" });
+      expect(await extractor(url).extract(images, signal(), NO_LABELS)).toMatchObject({ kind: "failure" });
     }
   });
 
@@ -194,7 +196,7 @@ describe("RelayExtractor", () => {
     const url = await relay(() => {
       // never answers
     });
-    expect(await extractor(url, 200).extract(images, signal())).toEqual({
+    expect(await extractor(url, 200).extract(images, signal(), NO_LABELS)).toEqual({
       kind: "failure",
       message: "No answer within 0.2 s.",
     });
@@ -205,7 +207,7 @@ describe("RelayExtractor", () => {
       // never answers
     });
     const controller = new AbortController();
-    const pending = extractor(url).extract(images, controller.signal);
+    const pending = extractor(url).extract(images, controller.signal, NO_LABELS);
     setTimeout(() => {
       controller.abort();
     }, 50);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CATEGORY_NOT_FOUND_ERROR, categoriesContract, tagsContract } from "./labels.ts";
 import { procedure } from "./procedure.ts";
 
 // Stores (companies) and the identifiers they are recognized by (SPEC.md §5, §6.4, §6.7).
@@ -80,7 +81,13 @@ export type ItemIdentifier = z.infer<typeof ItemIdentifier>;
 export const ItemListEntry = ItemRef.extend({ identifierCount: z.number().int().min(0) });
 export type ItemListEntry = z.infer<typeof ItemListEntry>;
 
-export const ItemDetail = z.object({ item: ItemRef, identifiers: z.array(ItemIdentifier) });
+export const ItemDetail = z.object({
+  item: ItemRef,
+  identifiers: z.array(ItemIdentifier),
+  /** Set by a person only; applies to every purchase of the item (SPEC.md §5). */
+  categoryId: z.uuid().nullable(),
+  tagIds: z.array(z.uuid()),
+});
 export type ItemDetail = z.infer<typeof ItemDetail>;
 
 /**
@@ -128,7 +135,12 @@ export type StoreIdentifier = z.infer<typeof StoreIdentifier>;
 export const StoreListEntry = StoreRef.extend({ identifierCount: z.number().int().min(0) });
 export type StoreListEntry = z.infer<typeof StoreListEntry>;
 
-export const StoreDetail = z.object({ store: StoreRef, identifiers: z.array(StoreIdentifier) });
+export const StoreDetail = z.object({
+  store: StoreRef,
+  identifiers: z.array(StoreIdentifier),
+  /** What the household usually buys here; set by a person only (SPEC.md §5). */
+  defaultCategoryId: z.uuid().nullable(),
+});
 export type StoreDetail = z.infer<typeof StoreDetail>;
 
 const NEEDS_ANSWERS = {
@@ -139,6 +151,7 @@ const NEEDS_ANSWERS = {
 const STORE_NOT_FOUND = { status: 404, message: "No such store." } as const;
 const ITEM_NOT_FOUND = { status: 404, message: "No such item." } as const;
 const ITEM_IDENTIFIER_NOT_FOUND = { status: 404, message: "No such identifier." } as const;
+const MAX_TAGS = 50;
 
 export const catalogContract = {
   items: {
@@ -157,6 +170,27 @@ export const catalogContract = {
       .input(z.object({ id: z.uuid(), name: ItemName }))
       .output(z.object({ item: ItemRef }))
       .errors({ ITEM_NOT_FOUND }),
+    /** Saves at once; every purchase of the item without its own category shows it (SPEC.md §5). */
+    setCategory: procedure
+      .input(z.object({ id: z.uuid(), categoryId: z.uuid().nullable() }))
+      .output(ItemDetail)
+      .errors({ ITEM_NOT_FOUND, CATEGORY_NOT_FOUND: CATEGORY_NOT_FOUND_ERROR }),
+    /** Replaces the item's tags; unknown tags are left out. Saves at once. */
+    setTags: procedure
+      .input(z.object({ id: z.uuid(), tagIds: z.array(z.uuid()).max(MAX_TAGS) }))
+      .output(ItemDetail)
+      .errors({ ITEM_NOT_FOUND }),
+    /** Several items' categories and tags at once, for the receipt page. Unknown items are left out. */
+    labels: procedure
+      .route({ method: "GET" })
+      .input(z.object({ ids: z.array(z.uuid()).max(500) }))
+      .output(
+        z.object({
+          items: z.array(
+            z.object({ id: z.uuid(), categoryId: z.uuid().nullable(), tagIds: z.array(z.uuid()) }),
+          ),
+        }),
+      ),
   },
   itemIdentifiers: {
     remove: procedure
@@ -189,7 +223,14 @@ export const catalogContract = {
         STORE_NOT_FOUND,
         STORE_NAME_TAKEN: { status: 409, message: "Another store already has that name." },
       }),
+    /** "What do you usually buy here?" Saves at once; null clears it. */
+    setDefaultCategory: procedure
+      .input(z.object({ id: z.uuid(), categoryId: z.uuid().nullable() }))
+      .output(StoreDetail)
+      .errors({ STORE_NOT_FOUND, CATEGORY_NOT_FOUND: CATEGORY_NOT_FOUND_ERROR }),
   },
+  categories: categoriesContract,
+  tags: tagsContract,
   identifiers: {
     /**
      * Add an identifier by hand. Normalized like a learned one. If it is saved for another

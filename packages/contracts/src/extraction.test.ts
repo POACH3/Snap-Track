@@ -39,6 +39,19 @@ describe("ExtractedReceipt", () => {
     expect(parsed.transactionNumbers).toEqual([{ label: "REG", value: "4" }]);
   });
 
+  it("reads category and tag numbers, also written as text, and drops unreadable ones", () => {
+    const parsed = ExtractedReceipt.parse({
+      lines: [
+        { printedName: "MILK", category: "12", tags: [3, "4", "dairy", null] },
+        { printedName: "BREAD", category: "bakery" },
+      ],
+    });
+    expect(parsed.lines.map((line) => [line.category, line.tags])).toEqual([
+      [12, [3, 4]],
+      [null, []],
+    ]);
+  });
+
   it("refuses something that isn't an object at all", () => {
     expect(ExtractedReceipt.safeParse("a receipt").success).toBe(false);
     expect(ExtractedReceipt.safeParse([1]).success).toBe(false);

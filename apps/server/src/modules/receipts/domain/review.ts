@@ -1,6 +1,7 @@
 import type {
   DraftLine,
   ItemRef,
+  LineCategory,
   LineItemSuggestion,
   ReceiptDetail,
   ReceiptDraft,
@@ -8,14 +9,15 @@ import type {
 } from "@snaptrack/contracts";
 import type { Cents, Id } from "@snaptrack/core";
 import type { LineItem, ReceiptData } from "./extracted-data.ts";
-import type { StoredLine } from "./receipt.ts";
+import type { LineLabels, StoredLine } from "./receipt.ts";
 
 /** A line as the review form saves it: an existing line keeps its id. */
-export type ReviewedLine = Omit<LineItem, "suggestedItemName"> & {
-  readonly id?: Id;
-  /** Resolved before saving: a chosen item, a new one just created, or a match. */
-  readonly itemId: Id | null;
-};
+export type ReviewedLine = Omit<LineItem, "suggestedItemName"> &
+  LineLabels & {
+    readonly id?: Id;
+    /** Resolved before saving: a chosen item, a new one just created, or a match. */
+    readonly itemId: Id | null;
+  };
 
 /** Store details as printed, when nothing was read. */
 export const EMPTY_EVIDENCE: StoreEvidence = {
@@ -85,6 +87,9 @@ export function linesFromDraft(lines: readonly DraftLine[]): ReviewedLine[] {
     lineTotalCents: line.lineTotalCents,
     discountCents: line.discountCents,
     taxCode: line.taxCode,
+    lineCategoryId: line.categoryId,
+    tagIds: [...new Set(line.tagIds)],
+    suggestionOutcome: line.suggestionOutcome,
   }));
 }
 
@@ -95,6 +100,7 @@ export function draftOf(
   lines: readonly StoredLine[],
   items: ReadonlyMap<Id, ItemRef>,
   suggestions: ReadonlyMap<Id, LineItemSuggestion | null>,
+  categories: ReadonlyMap<Id, LineCategory | null>,
 ): ReceiptDetail["draft"] {
   return {
     purchasedAt: data.purchasedAt,
@@ -125,6 +131,12 @@ export function draftOf(
       discountCents: line.discountCents,
       taxCode: line.taxCode,
       suggestedItemName: line.suggestedItemName,
+      categoryId: line.lineCategoryId,
+      tagIds: [...line.tagIds],
+      suggestionOutcome: line.suggestionOutcome,
+      category: categories.get(line.id) ?? null,
+      suggestedCategoryId: line.suggestedCategoryId,
+      suggestedTagIds: [...line.suggestedTagIds],
     })),
   };
 }

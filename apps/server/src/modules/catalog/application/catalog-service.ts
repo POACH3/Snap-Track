@@ -2,6 +2,7 @@ import type {
   IdentifierAnswer,
   IdentifierQuestion,
   IdentifierState,
+  ItemDetail,
   LearningNotice,
   StoreDetail,
   StoreEvidence,
@@ -23,19 +24,26 @@ import {
 import { planStoreLearning, type LearningChange, type LearningPlan } from "../domain/learning.ts";
 import { rankSuggestions } from "../domain/suggestions.ts";
 import type {
+  CategoryRepository,
   ItemIdentifierRepository,
   ItemRepository,
+  PurchaseLabelUsage,
   StoreIdentifierRepository,
   StoreIdentifierRow,
   StoreRepository,
+  TagRepository,
 } from "../ports.ts";
-import { createItemCatalog, type ConfirmedLine } from "./item-catalog.ts";
+import { createItemCatalog, type ConfirmedLine, type ItemNotFound } from "./item-catalog.ts";
+import { createLabelCatalog, type CategoryNotFound } from "./label-catalog.ts";
 
 export interface CatalogDeps {
   stores: StoreRepository;
   identifiers: StoreIdentifierRepository;
   items: ItemRepository;
   itemIdentifiers: ItemIdentifierRepository;
+  categories: CategoryRepository;
+  tags: TagRepository;
+  usage: PurchaseLabelUsage;
   transaction: Transaction;
 }
 
@@ -51,6 +59,7 @@ export type CatalogService = ReturnType<typeof createCatalogService>;
 
 export function createCatalogService(deps: CatalogDeps) {
   const itemCatalog = createItemCatalog(deps);
+  const labelCatalog = createLabelCatalog(deps);
   const savedFor = (identifiers: readonly ReceiptIdentifier[]) =>
     deps.identifiers.findByValues(identifiers.map((identifier) => identifier.value));
 
@@ -68,6 +77,7 @@ export function createCatalogService(deps: CatalogDeps) {
     if (store === undefined) return undefined;
     return {
       store,
+      defaultCategoryId: deps.stores.defaultCategoryOf(storeId),
       identifiers: deps.identifiers.listForStore(storeId).map((row) => ({
         id: row.id,
         type: row.type,
@@ -126,6 +136,50 @@ export function createCatalogService(deps: CatalogDeps) {
 
   return {
     ...itemCatalog,
+    ...labelCatalog,
+
+    /** A store's default category: what its lines without their own or their item's get. */
+    storeDefaultCategory(storeId: Id): Id | null {
+      return deps.stores.defaultCategoryOf(storeId);
+    },
+
+    /** "What do you usually buy here?" Saved at once (SPEC.md §6.5). */
+    setStoreDefaultCategory(
+      storeId: Id,
+      categoryId: Id | null,
+    ): Result<StoreDetail, StoreNotFound | CategoryNotFound> {
+      return deps.transaction.run(() => {
+        if (deps.stores.findById(storeId) === undefined) return err({ kind: "store-not-found" as const });
+        if (categoryId !== null && deps.categories.findById(categoryId) === undefined)
+          return err({ kind: "category-not-found" as const });
+        deps.stores.setDefaultCategory(storeId, categoryId);
+        return ok(storeDetail(storeId) as StoreDetail);
+      });
+    },
+
+    /** "This item": every purchase of it without its own category shows this one (SPEC.md §5). */
+    setItemCategory(itemId: Id, categoryId: Id | null): Result<ItemDetail, ItemNotFound | CategoryNotFound> {
+      return deps.transaction.run(() => {
+        if (deps.items.findById(itemId) === undefined) return err({ kind: "item-not-found" as const });
+        if (categoryId !== null && deps.categories.findById(categoryId) === undefined)
+          return err({ kind: "category-not-found" as const });
+        deps.items.setCategory(itemId, categoryId);
+        return ok(itemCatalog.itemDetail(itemId) as ItemDetail);
+      });
+    },
+
+    /** Replaces the item's tags; unknown tags are left out. */
+    setItemTags(itemId: Id, tagIds: readonly Id[]): Result<ItemDetail, ItemNotFound> {
+      return deps.transaction.run(() => {
+        if (deps.items.findById(itemId) === undefined) return err({ kind: "item-not-found" as const });
+        const known = labelCatalog.knownTagIds(tagIds);
+        deps.items.setTags(
+          itemId,
+          tagIds.filter((id) => known.has(id)),
+        );
+        return ok(itemCatalog.itemDetail(itemId) as ItemDetail);
+      });
+    },
 
     /** The store a receipt's evidence identifies, or undefined if it needs a person (SPEC.md §6.4). */
     identifyStore(evidence: StoreEvidence): { storeId: Id; match: StoreMatch } | undefined {
