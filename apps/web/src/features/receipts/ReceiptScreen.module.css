@@ -137,7 +137,8 @@
   /* The photo card over the edit card (docs/DESIGN.md, "Receipts screens"). */
   grid-template-rows: auto minmax(0, 1fr) minmax(0, 1.25fr);
   gap: 12px;
-  height: calc(100dvh - 26px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  /* Fills the page area, which is exactly one screen tall (AppShell, "fullHeight"). */
+  height: 100%;
 }
 .noPhoto {
   grid-template-rows: auto minmax(0, 1fr);
@@ -255,11 +256,4 @@
   width: 20px;
   height: 20px;
   accent-color: var(--accent);
-}
-
-/* Between 640px and 1023px the phone layout sits beside the side navigation, with its padding. */
-@media (min-width: 640px) {
-  .phone {
-    height: calc(100dvh - 72px - env(safe-area-inset-top));
-  }
 }

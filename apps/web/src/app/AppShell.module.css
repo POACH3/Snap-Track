@@ -18,6 +18,17 @@
   padding-bottom: calc(18px + env(safe-area-inset-bottom));
 }
 
+/* Below the desktop layout the receipt page is exactly one screen tall and never scrolls: its
+   cards stay put, and only the edit card's body scrolls (docs/DESIGN.md, "Receipts screens"). */
+@media (max-width: 1023px) {
+  .fullHeight {
+    box-sizing: border-box;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
 .sideNav {
   display: none;
 }
