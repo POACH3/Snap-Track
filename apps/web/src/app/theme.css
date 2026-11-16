@@ -25,10 +25,15 @@
   --danger-border: rgba(248, 113, 113, 0.3);
   /* Floating layers only: top bar, tab bar, toasts, sheets (docs/DESIGN.md, "Surfaces"). */
   --surface-glass: rgba(30, 35, 32, 0.62);
+  /* Modals and confirm modals: more see-through, light blur (docs/DESIGN.md, "Surfaces"). */
+  --surface-glass-strong: rgba(30, 35, 32, 0.45);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --glass-blur: blur(16px) saturate(140%);
   --scrim: rgba(8, 10, 9, 0.55);
+  /* Behind receipt photos, the same in both themes so paper reads the same (docs/DESIGN.md, "Receipts screens"). */
+  --photo-backdrop: #2a2f2c;
+  --on-photo-backdrop: #c9d1cc;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   --shadow-glass: 0 12px 40px rgba(0, 0, 0, 0.45);
   --snap-glow: 0 10px 24px rgba(39, 103, 73, 0.45);
@@ -66,6 +71,7 @@
     --danger-tint: rgba(204, 20, 20, 0.12);
     --danger-border: rgba(204, 20, 20, 0.4);
     --surface-glass: rgba(255, 255, 255, 0.62);
+    --surface-glass-strong: rgba(255, 255, 255, 0.45);
     --glass-border: rgba(20, 22, 21, 0.08);
     --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.8);
     --scrim: rgba(20, 22, 21, 0.25);

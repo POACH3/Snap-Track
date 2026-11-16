@@ -1,17 +1,9 @@
+import type { ConsistencyWarning } from "@snaptrack/contracts";
 import type { Cents } from "@snaptrack/core";
 import type { LineItem, ReceiptData } from "./extracted-data.ts";
 
 /** A figure that doesn't add up, shown to the reviewer (SPEC.md §6.3 step 4). Warnings, never failures. */
-export type ConsistencyWarning =
-  | { kind: "lines-vs-subtotal"; expectedCents: Cents; printedCents: Cents }
-  | { kind: "subtotal-vs-total"; expectedCents: Cents; printedCents: Cents }
-  | { kind: "tax-lines-vs-tax"; expectedCents: Cents; printedCents: Cents }
-  | { kind: "payments-vs-total"; expectedCents: Cents; printedCents: Cents }
-  | { kind: "discounts-vs-savings"; expectedCents: Cents; printedCents: Cents }
-  | { kind: "item-count"; counted: number; printed: number }
-  | { kind: "line-price"; position: number; expectedCents: Cents; printedCents: Cents }
-  | { kind: "date-in-future"; purchasedAt: string }
-  | { kind: "date-too-old"; purchasedAt: string };
+export type { ConsistencyWarning };
 
 /** "≈" allows 2 cents per figure added up, for rounding on the receipt. */
 const TOLERANCE_PER_FIGURE = 2;

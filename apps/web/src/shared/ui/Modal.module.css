@@ -1,0 +1,103 @@
+/* Modals (docs/DESIGN.md, "Overlays"): strong glass over the scrim; a bottom sheet on phones. */
+.modal {
+  width: min(100% - 32px, var(--modal-width));
+  max-height: min(100dvh - 32px, 720px);
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-panel);
+  background: var(--surface-glass-strong);
+  box-shadow: var(--glass-highlight), var(--shadow-glass);
+  color: var(--text-body);
+  -webkit-backdrop-filter: blur(5px) saturate(160%);
+  backdrop-filter: blur(5px) saturate(160%);
+}
+.modal::backdrop {
+  background: var(--scrim);
+}
+.modal[open] {
+  display: flex;
+  animation: fade 200ms ease-out;
+}
+
+.small {
+  --modal-width: 420px;
+}
+.medium {
+  --modal-width: 560px;
+}
+.large {
+  --modal-width: 720px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-height: 0;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: -8px -8px 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+/* Long content scrolls; the heading and buttons stay put. */
+.body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 639px) {
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    margin: auto 0 0;
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal[open] {
+    animation: none;
+  }
+}

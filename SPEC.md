@@ -34,7 +34,7 @@ Every feature works on both, but each screen is designed first for the device it
 - **Public / multi-household use.** No sign-up flow, no tenant separation, no public hosting.
 - **Other automated inputs.** No digital/PDF receipts or bank/card statement import (may be revisited later; see §12). Expenses without a paper receipt are entered by hand (F17) or, for online retailers, imported from the retailer's CSV order report (F19).
 - **Importing history.** The app starts fresh.
-- **Budgeting.** No spending limits or alerts in the planned scope.
+- **Budgeting beyond limits and alerts.** Budgets are spending limits with alerts (F23); no envelope budgeting, savings goals or forecasts.
 - **Multi-currency.** One currency (USD) assumed throughout.
 - **Native mobile apps / app stores.**
 - **Third-party AI services.** Extraction runs on a self-hosted model.
@@ -50,7 +50,7 @@ Every feature works on both, but each screen is designed first for the device it
 | F2 | Capture works without a connection; queued receipts upload once the connection returns. |
 | F3 | The server extracts everything that identifies the store, the purchase and payment details, every line item, and a full word-for-word transcription of the receipt, as listed in §6.3.2. |
 | F4 | Extracted data counts right away, marked unreviewed, and can be reviewed and corrected at any time. Receipts the model could not read are marked review required and are filled in by hand. |
-| F5 | The original images (one or more per receipt) are stored with their receipt and shown side by side with the extracted data, both during review and when viewing a receipt later. |
+| F5 | The original images (one or more per receipt) are stored with their receipt. They are shown side by side with the extracted data, both during review and when viewing a receipt later. A confirmed receipt is first shown as a short digital receipt, with a link to its images. |
 | F6 | Each line item has its own category, so one receipt can span several categories. |
 | F7 | The store is identified as a **company** (e.g. Walmart), not a location, with extreme accuracy: an automatic match is made only on a known identifier, and never on a guess. Items are normalized so the same item is counted as one across receipts. |
 | F8 | Once a user confirms which company a receipt is from, every identifier on that receipt is remembered, so the user never has to confirm that company again. |
@@ -68,6 +68,7 @@ Every feature works on both, but each screen is designed first for the device it
 | F20 | A user can name any item (e.g. turn a truncated printed name into a readable one). The name is remembered: every past and future purchase of that item, recognized by its code or printed name, shows the user's name everywhere, including summaries. |
 | F21 | A user can add any number of tags (e.g. "dessert", "luxury item") to an item, applying to every purchase of it, or to a single purchase. These are free tags: simple filters outside the hierarchy, never assigned to a category or class. A tag can be compared with a hierarchy entry or another tag, but the user is always told how much overlaps and is counted twice. |
 | F22 | Each line item is categorized individually. A user can give a store a default category ("what I usually buy here"), which applies to every line from it, and can recategorize any single purchase or any item (every purchase of it). User-set item categories win over the store default. The software's guesses at categories and tags are never applied unless the user accepts them; when a user-set category already applies, the guess stays silent. |
+| F23 | A user can set a budget (a spending limit over a period the user chooses) on one item, one tag, or one hierarchy entry (category or class, any level); a budget never covers several. Unreviewed receipts count toward it, as in analytics. The app alerts when spending nears the limit (80% by default), when it goes over, and on every purchase after that while it stays over. Each alert can be adjusted by the user (turned off, and for "near", how near). Alerts are shown in the app as a toast when the receipt that triggers one finishes processing, or the next time the app is opened if it was closed by then. No push notifications. |
 
 ### Non-functional
 - **Fully private.** No data leaves the home network. Extraction runs on a self-hosted vision model.
@@ -181,7 +182,7 @@ snap-track/
 │   └── web/
 │       └── src/
 │           ├── app/                     # routing, providers, layout
-│           ├── features/                # capture, sync, receipts, review, catalog, analytics, settings
+│           ├── features/                # capture, sync, receipts, review, library, analytics, settings
 │           └── shared/                  # UI components, typed API client, hooks
 ├── packages/
 │   ├── contracts/                       # Zod schemas: API, extraction output (single source of truth)
@@ -347,11 +348,11 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
 - `id`, `user_id`, `expires_at`
 
 **`stores`** (catalog) — companies where money is spent (e.g. "Walmart", "Amazon"). Locations are not tracked as separate stores.
-- `id`, `name` (display name, unique)
+- `id`, `name` (display name, unique ignoring case)
 - `default_category_id` — what the user usually buys here (e.g. Groceries). Set by a user only; optional. Applies to every line from this store that has no item or line category (see Classification rules).
 
 **`store_identifiers`** (catalog) — the table of known identifiers: every detail ever confirmed as belonging to a company. This is how stores are recognized (§6.4).
-- `id`, `store_id`, `type`, `value` (normalized; see below), `state` (`active` or `ambiguous` — an ambiguous identifier is never used for automatic matching), `first_receipt_id`, `times_seen`, `last_seen_at`
+- `id`, `store_id`, `type`, `value` (normalized; see below), `display_value` (as first printed, or as typed in the Library), `state` (`active` or `ambiguous` — an ambiguous identifier is never used for automatic matching), `first_receipt_id` (null when added by hand in the Library), `times_seen`, `last_seen_at`
 - Unique on (`type`, `value`): one identifier can only ever point to one company.
 - Types and how each value is normalized:
   | Type | Example | Normalized as |
@@ -359,9 +360,11 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
   | `name` | "WAL*MART", "Walmart Supercenter" | lowercased, punctuation and extra spaces removed |
   | `legal_name` | "Wal-Mart Stores, Inc." | same as `name` |
   | `phone` | "(555) 123-4567" | digits only, with country code |
-  | `website` | "www.walmart.com/receipt" | bare domain (`walmart.com`) |
-  | `address` | "123 Main St, Springfield IL 62701" | standardized street + ZIP |
+  | `website` | "www.walmart.com/receipt", or the domain of a printed email address | bare domain (`walmart.com`) |
+  | `address` | "123 Main St, Springfield IL 62701" | standardized street + ZIP (only when both were read) |
   | `logo_text` | stylized logo text read by the model | same as `name` |
+- The three name-like types (`name`, `legal_name`, `logo_text`) are looked up against each other: a logo reading "walmart" finds a saved `name` of "walmart". Each is still saved under its own type.
+- Free email domains (gmail.com and the like) are on the exclusion list (§6.4), since small businesses use them.
 - Store numbers are kept on the receipt as evidence but are not identifiers on their own, since different companies reuse the same numbers.
 - Addresses are supporting identifiers: they back up a match but never make one alone, since several companies can share one address (§6.4).
 
@@ -426,7 +429,8 @@ All money is stored as **integer cents**. All IDs are UUIDs. Receipt IDs are gen
   - `confirmed`: a person has reviewed (or entered) the data.
 - `store_id` (the company; null until identified)
 - `store_matched_by`: `identifier` (automatic, from known identifiers), `user` (chosen by a person), or `import_format` (set by a retailer import); null while unidentified
-- `store_evidence` (JSON, schema in `packages/contracts`): everything extracted about the store (§6.3.2), plus which identifiers produced the match. Kept so the match can be explained ("Matched by phone number") and re-run later.
+- `store_evidence` (JSON, schema in `packages/contracts`): everything extracted about the store (§6.3.2), as read (or as corrected by the reviewer). Kept so matching can be re-run later.
+- `store_match` (JSON, schema in `packages/contracts`): which identifiers produced the match, and any supporting address. Kept so the match can be explained ("Matched by phone number"). Null unless `store_matched_by` is `identifier`.
 - `captured_at` — when the photo was taken on the device (for photos chosen from a library or a folder, the file's date). The receipts list is ordered by it, so receipts uploaded late still appear in the order they were taken.
 - `purchased_at` (local date and time as printed; time optional)
 - `subtotal_cents`, `tax_cents` (total of all tax lines), `tip_cents`, `total_cents`
@@ -614,6 +618,8 @@ Runs right after extraction. Because unreviewed receipts count toward analytics,
    6. **Unknown:** if nothing hits, nothing is applied. The receipt is flagged **Store needs confirmation**, with suggestions: the model's brand guess and known companies with similar names.
    - The model's brand guess, similar-name matches, and store numbers are **never applied automatically**; they only rank suggestions. This is what keeps automatic matches extremely accurate: a store is only ever applied because a person previously confirmed one of the identifiers on this receipt.
    - Until confirmed, an unidentified receipt still counts toward analytics, grouped under **Unidentified store**.
+   - Suggestions are worked out again each time a receipt is opened for review, with the identifiers known then. A store learned since extraction is shown first, with the identifier that points to it, but is not applied.
+   - **Re-matching after learning, only when the user agrees.** When a confirm teaches new identifiers and other receipts with no store (not yet confirmed) would now match, the user is asked ("3 other receipts now match Walmart. Match them too?"). On yes, identification runs again on those receipts and only clear matches (step 3) are applied. On no, nothing changes.
 2. **Items:** for each line, look up its barcode (any company), then its code, then its printed name (that company) in `item_identifiers`. On a hit, set `item_id`; the line then shows the item's name and carries its tags. On a miss:
    - Leave `item_id` empty and offer the closest existing item by fuzzy match on the review screen.
    - Store the model's suggested readable name, category (chosen from the current hierarchy at the most specific level it can justify), and tags (chosen from existing tags) as suggestions only.
@@ -624,22 +630,32 @@ Runs right after extraction. Because unreviewed receipts count toward analytics,
 5. Learning (§6.7) happens only when a person confirms or edits, never from unreviewed data.
 
 ### 6.5 Review (client)
-- The receipt image and the editable extracted fields are shown side by side (stacked on a phone, with the image collapsible). A receipt with several photos shows them in order, one after another, in the same panel. The image supports pinch-zoom and pan, so small print can be checked against each field.
-- The same side-by-side layout (one shared component) is used when opening a confirmed receipt later, read-only until **Edit** is tapped.
-- Every field is editable. Lines can be added, removed, or split.
+- **The Receipts list** shows every transaction, newest first. Each row is a collapsed **digital receipt**: date, store name, amount, and its status (confirmed or not) as a colored icon.
+- **A confirmed row expands in place** into the digital receipt. It is a summary, not a copy of the paper receipt: store name, date, each line with its price, subtotal, tax and total (plus receipt discount and tip when there are any), and the payment method. At the bottom, **View receipt image** opens the receipt page.
+- **An unconfirmed row opens the receipt page.**
+- **The receipt page** shows the receipt image beside every extracted field (stacked on a phone, with the image collapsible). A receipt with several photos shows them in order, one after another, in the same panel. The image supports pinch-zoom and pan, so small print can be checked against each field. Unconfirmed receipts open ready to edit, with **Confirm**. Confirmed receipts open read-only until **Edit** is tapped.
+- Every field is editable, including the store details as printed (so a misread phone number is fixed before it is learned). Lines can be added, removed, or split (a copy of the line is inserted below it with empty amounts).
+- **What the review screen shows:** always visible: store, date and time, lines, subtotal, receipt discount, tax, tip, total, note. Collapsed and editable: "More details" (tax lines, payments, transaction numbers, printed savings, printed item count) and "Store details as printed" (§6.3.2). Collapsed and read-only: the transcription.
+- **Nothing is saved until Confirm** (or **Save**, when editing a confirmed receipt), including a new store, which is created as part of the confirm. Leaving with unsaved changes asks first. If the receipt changed since it was opened (another person, or extraction finishing), the save is refused and the screen offers to reload.
+- A receipt still waiting for extraction can be entered by hand and confirmed; extraction then leaves it alone.
 - Consistency warnings are highlighted next to the fields involved.
-- **Store first.** When the store is unidentified or conflicting, the review screen opens on a **Store needs confirmation** prompt: pick a suggested company, search known companies, or create a new one. When the store was matched automatically, the screen shows which identifier matched (e.g. "Matched by phone number").
+- **Store first.** When the store is unidentified or conflicting, the review screen opens on a **Store needs confirmation** prompt: pick a suggested company, search known companies, or create a new one. The name the receipt shows (the model's brand guess, else the logo, else the printed name, without a store number) is offered as a new store in one tap, and starts out chosen when no known company is suggested, so a correct name needs no typing. It is still only a choice: nothing is saved until Confirm. When the store was matched automatically, the screen shows which identifier matched (e.g. "Matched by phone number").
 - Store and item pickers search existing entries or create new ones.
 - **Each line shows the item's name**, with the printed text beneath it. Tapping the name lets the user:
   - **Rename the item.** The new name applies to the item everywhere: this line, every past purchase of it, and every future one.
   - **Choose a different item** (if the match is wrong, or two items are really the same product).
   - **Tag it:** add or remove tags on the item (every purchase of it) or on this purchase only. The two are shown apart, so it's clear which applies where.
-- Items can also be renamed and tagged from an Items screen, without opening a receipt.
+- Items can also be renamed and tagged from the **Library**, without opening a receipt.
+- **The app has four main sections:** Receipts (the list and each receipt), Analytics (every filter, breakdown, chart and search), Library, and Settings (light and dark mode, image retention, and the like). The **Snap** button sits between them. The Receipts list's only filter is review status (unreviewed / review required), as a to-do list.
+- **The Library** holds what the user has set, all editable, so the app learns from it:
+  - **Stores:** the stores from receipts, with their identifying information (§6.7) and default category.
+  - **Items:** the user's own names for specific items, with their categories and tags.
+  - **Labels:** the categories, classes and free tags (§5).
 - **Categories on the review screen:**
   - Each line shows its category and where it came from (this purchase, this item, or the store's default).
   - Any line can be recategorized. The user chooses whether the new category is for **this purchase only** or for **this item** (every purchase of it).
   - **Set all lines:** one action assigns a category to every line on the receipt (as this-purchase categories).
-  - **Store default:** when a store has no default yet, the screen offers "What do you usually buy here?" The answer becomes the store's default and applies at once to every line without an item or line category. The default can also be changed later from the store's detail screen.
+  - **Store default:** when a store has no default yet, the screen offers "What do you usually buy here?" The answer becomes the store's default and applies at once to every line without an item or line category. The default can also be changed later in the Library.
   - **Suggestions:** an Unclassified line shows the software's suggested category (and suggested tags) with **Accept** / **Dismiss**. Nothing is applied until accepted. Lines that already have a category from the user, the item, or the store show no suggestion.
 - Duplicates: flagged as **definite** when the store matches and either a transaction number matches, or the approval code and card last four match; flagged as **possible** when the store, date, time (if printed), and total match.
 - **Confirm** saves everything, sets `confirmed`, and triggers learning (below). Confirm is blocked until the store and the total are set; every other field may be left empty.
@@ -663,7 +679,9 @@ On confirm (and whenever a confirmed receipt's store or items are edited), `rece
 - If an identifier is already saved for a **different** company, the user is asked before anything changes ("This phone number is saved for Target. Move it to Walmart?"). Identifiers are never silently moved.
 - **Shared addresses:** if an address is already saved for a different company, it is not moved. Both companies really are there, so it is marked `ambiguous` (a shared location) and the user is told ("This address is also saved for Target; it is now treated as a shared location").
 - **Correcting a wrong automatic match:** the identifiers that caused it are marked `ambiguous` (they stop being used for automatic matching), and the receipt's other identifiers are saved for the correct company. The same mistake can't happen twice.
-- Every store has an **Identifiers** list (in the store's detail screen) showing what it is recognized by, where each identifier can be removed or marked ambiguous by hand. Merging two stores combines their identifiers.
+- **Changing the store on a confirmed receipt:** its identifiers saved for the old company were confirmed by a person, so moving them is asked first, like any identifier saved for a different company.
+- Saving a confirmed receipt again with the same store adds any new identifiers but doesn't count the existing ones as seen again.
+- Every store's identifiers are listed in **Library › Stores**, each with its value as printed, state, times seen and last seen. They are all editable: the store can be renamed, and identifiers added by hand (normalized like learned ones, with the same "ask before moving" rule), removed, marked ambiguous, or used for matching again. Merging two stores combines their identifiers.
 
 **Items:**
 - Saves the line's barcode or code (if printed) and printed name → chosen item in `item_identifiers`, with the same "ask before moving" rule. So once an item is named, any purchase sharing its code or printed name shows that name, even when the printed text differs (e.g. truncated differently on another receipt).
@@ -872,16 +890,17 @@ Each stage ends in something that runs and is verified. A stage is done when its
 **Done when:** a typical grocery receipt reaches `unreviewed` with all lines, its store evidence, payments, and full transcription extracted, and line totals net of item discounts; a long receipt in two or more photos is extracted as one receipt with every line; an unreadable image ends up `review_required`; a SnapTrack restart mid-job resumes the job; stopping the LLM server leaves jobs waiting and they complete once it's back. While the relay replies busy, jobs wait without using up attempts and complete once it is free. A receipt interrupted by a chat goes back to the queue and is completed later, and interruptions never count toward the 5-attempt limit. (That the relay switches back to the previous model, and puts chat ahead of receipts, is tested in the LLM-Server project.)
 
 ### Stage 4 — Review and log
-**Build:** `catalog` module (stores, items, categories with defaults, store and item identifiers, store identification, matching, learning, store detail screen with its Identifiers list); hierarchy editor (L1–L4: add, rename, move, archive, merge); hierarchy picker showing the full path (e.g. "Groceries › Frozen foods › Ice cream"); free tags; item naming and tagging from the review screen and an Items screen; side-by-side image/data component with zoom; review screen; receipt detail view (same component); manual entry with quick and full modes (same form component, §6.6); store/item pickers; confirm flow; duplicate warning.
-**Done when:** after a company is confirmed once, a second receipt from it (same or different location, sharing at least one identifier) is matched to it automatically, with its repeat items; a receipt whose identifiers point to two companies is flagged, not guessed; a receipt that matches a known company only by address is flagged, not matched; correcting a wrong automatic match stops the identifier that caused it from matching again; a receipt can't be confirmed without a store or a total but can with every other field empty; after a user names an item, a later receipt from the same company with the same code but differently printed text shows the user's name; a tag added to an item appears on all its purchases, and a tag added to one purchase appears only there; with a store default of Groceries, every line from that store is Groceries and the model's differing guess is not shown; recategorizing one item "for this item" applies on its next purchase from any store, while "this purchase only" changes nothing else; an Unclassified line's suggestion has no effect until accepted; a confirmed receipt reopens with its image beside its data; a review-required receipt can be entered by hand and confirmed; a quick manual entry and a full manual entry are each saved as confirmed and appear in the receipts list labeled manual; after merging two items, every line from both shows the kept item (and the same for merging two stores or two hierarchy entries); a merge that fails partway changes nothing.
+**Build:** `catalog` module (stores, items, categories with defaults, store and item identifiers, store identification, matching, learning); hierarchy editor (L1–L4: add, rename, move, archive, merge); hierarchy picker showing the full path (e.g. "Groceries › Frozen foods › Ice cream"); free tags; item naming and tagging from the review screen and the Library; side-by-side image/data component with zoom; review screen; receipt detail view (same component); manual entry with quick and full modes (same form component, §6.6); store/item pickers; confirm flow; duplicate warning. Navigation becomes four sections (Receipts, Analytics, Library, Settings) plus **Snap** (§6.5); the Search placeholder goes, since search is part of Analytics. The **Library** holds Stores (with their identifiers), Items, and Labels (the hierarchy editor and tags).
+**Plans (built in this order):** [store-review-plan.md](docs/feature-plans/store-review-plan.md) (stores and review), `items-plan.md`, `categories-and-tags-plan.md`, `manual-entry-plan.md` (with duplicate warnings), `catalog-merges-plan.md`.
+**Done when:** after a company is confirmed once, a second receipt from it (same or different location, sharing at least one identifier) is matched to it automatically, with its repeat items; a receipt whose identifiers point to two companies is flagged, not guessed; a receipt that matches a known company only by address is flagged, not matched; correcting a wrong automatic match stops the identifier that caused it from matching again; a receipt can't be confirmed without a store or a total but can with every other field empty; after a user names an item, a later receipt from the same company with the same code but differently printed text shows the user's name; a tag added to an item appears on all its purchases, and a tag added to one purchase appears only there; with a store default of Groceries, every line from that store is Groceries and the model's differing guess is not shown; recategorizing one item "for this item" applies on its next purchase from any store, while "this purchase only" changes nothing else; an Unclassified line's suggestion has no effect until accepted; a confirmed receipt expands in the list into its digital receipt, and its link opens the image beside its data; an identifier removed or marked ambiguous in the Library stops matching, and one added there starts; a review-required receipt can be entered by hand and confirmed; a quick manual entry and a full manual entry are each saved as confirmed and appear in the receipts list labeled manual; after merging two items, every line from both shows the kept item (and the same for merging two stores or two hierarchy entries); a merge that fails partway changes nothing.
 
 ### Stage 5 — Offline capture and sync  ← **first usable version (MVP)**
 **Build:** service worker app-shell caching; `UploadQueue` with IndexedDB adapter; sync on open/reconnect; Background Sync where supported; pending-count indicator; nightly backup job and a tested restore; `settings` module and Settings screen; both image retention settings and the nightly cleanup job; `export` module with full export (CSV, JSON, optional images).
 **Done when:** with the phone in airplane mode, three receipts are captured and one manual entry is saved, the app is closed, and all four upload correctly after the connection returns, on both Android and iPhone. With confirmed retention at 30 days and unreviewed retention at 365 days, the cleanup job removes images from receipts confirmed more than 30 days ago and from unreviewed receipts uploaded more than 365 days ago (their data still displays and still counts), deletes review-required receipts uploaded more than 365 days ago, and leaves everything else alone. With both set to keep indefinitely, it deletes nothing. A full export opens correctly in Excel and Numbers, its JSON validates against the schema, and its totals match the app's.
 
 ### Stage 6 — Breakdowns
-**Build:** `analytics` module; pick a chart library (ADR); by-store, by-item, and by-category monthly views; person filter; date range picker; tax/discount allocation.
-**Done when:** category totals for a month add up to the sum of that month's receipt amounts (§5, Rules) and match the store view's total, including a receipt whose lines don't add up to its total (the gap shows as Unitemized) and an unreviewed receipt with no printed total.
+**Build:** `analytics` module; pick a chart library (ADR); by-store, by-item, and by-category monthly views; person filter; date range picker; tax/discount allocation. **Budgets (F23):** a Budget section in the main navigation; set a limit on an item, tag, or hierarchy entry; alerts when near the limit, when over it, and on each purchase after while over, each adjustable. Details are settled in its own plan (§12).
+**Done when:** category totals for a month add up to the sum of that month's receipt amounts (§5, Rules) and match the store view's total, including a receipt whose lines don't add up to its total (the gap shows as Unitemized) and an unreviewed receipt with no printed total. A budget's spending matches the breakdown total for the same item, tag, or entry and period; each alert fires once at the right moment (near, over, each purchase after) and not when turned off.
 
 ### Stage 7 — Trends
 **Build:** monthly totals over time; month-over-month and year-over-year comparisons; drill-down from a trend to the underlying receipts.
@@ -890,7 +909,7 @@ Each stage ends in something that runs and is verified. A stage is done when its
 **Build:** price history per item per store; latest-price comparison across stores; spike detection and a flags view.
 
 ### Stage 9 — Search and view export
-**Build:** search receipts and line items; combined filters; Export button on every list, breakdown, and trend view (§8.2); XLSX writer.
+**Build:** search receipts and line items, in Analytics (§6.5); combined filters; Export button on every list, breakdown, and trend view (§8.2); XLSX writer.
 **Extraction comparison:** a small evaluation script and a set of hand-checked household receipts (kept out of git; they contain card digits), comparing one-pass and two-pass extraction (§6.3) on field accuracy and time per receipt. Prioritize the kinds of receipts that review corrections show the model gets wrong.
 
 ### Stage 10 — Retailer CSV import
@@ -913,18 +932,19 @@ Each stage ends in something that runs and is verified. A stage is done when its
 | How oRPC mounts on Fastify (its adapter or Node handler), and that a receipt image upload works through it end to end. | Stage 0 |
 | Whether oMLX gets the GPU when run as a LaunchDaemon with no one logged in, under its real service account rather than an admin account (tested in the LLM-Server project). | Before Stage 3 |
 | Chart library. | Stage 6 |
-| How to handle returns and refunds (negative receipts or line items?). | Stage 4 |
-| How to treat receipts split between people. (Several payment methods on one receipt are handled by `payments`.) | Stage 4 |
+| How to handle returns and refunds (negative receipts or line items?). Deferred 2026-11-15: until then the review form neither adds nor blocks negative amounts. | After Stage 4 |
+| Decided 2026-11-15: receipts are not split between people; each belongs to the person who logged it. (Several payment methods on one receipt are handled by `payments`.) | Stage 4 (done) |
 | Whether and how recorded tax codes are interpreted (e.g. to spread tax only across the lines it applies to). | Stage 6 |
 | Spike threshold: is 1.5× / $25 useful or noisy? | Stage 8 |
-| Which extracted fields each screen displays (all are stored regardless). | Stage 4 onward, per screen |
+| Which extracted fields each screen displays (all are stored regardless). Review screen decided (§6.5). | Stage 4 onward, per screen |
 | Decided: oMLX does not shrink receipt photos to 1 MP. Tested 2026-11-15 through the relay: a 4 MP photo used 3,410 prompt tokens (about 1,000 if shrunk) and took 14.9 s (12.2 s reading the image). No oMLX setting needed (§6.1). | Stage 3 (done) |
 | Decided: server-side image conversion uses macOS's built-in `sips`, behind the `ImageConverter` port (ADR 0005). | Stage 2 (done) |
 | What "other records from online retailers" covers beyond CSV (e.g. PDF invoices, order confirmation emails), and whether any are in scope. Currently digital/PDF receipts are a non-goal. | Stage 10 |
 | Other retailers' report formats, as they're supplied. | Stage 10 |
 | Status of imported entries: `unreviewed` (proposed) or treated as checked like manual entries. | Stage 10 |
 | How returns and refunds in a retailer report are recorded (ties to the returns question above). | Stage 10 |
-| Revisit non-goals later: digital receipts, budgeting. | After Stage 9 |
+| Budgets (F23), decided 2026-11-15: the period is set by the user per budget; unreviewed receipts count; "near" defaults to 80%; one budget covers exactly one item, tag, or hierarchy entry; alerts are in-app toasts only (push notifications would go through Apple's or Google's servers, outside the home network, §2). Still open: who sees an alert (the person whose purchase triggered it, or every household member), and how a tag budget treats purchases also counted under a category (§5, overlap notice). | Stage 6 |
+| Revisit non-goals later: digital receipts. | After Stage 9 |
 
 ---
 

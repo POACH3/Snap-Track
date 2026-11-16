@@ -17,6 +17,37 @@
   color: var(--text-muted);
 }
 
+/* Review filter chips (docs/DESIGN.md, "Receipts screens"). */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-raised);
+  color: var(--text-body);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--transition),
+    background-color var(--transition);
+}
+.chip:hover {
+  border-color: var(--border-hover);
+}
+.chip[aria-pressed="true"] {
+  border-color: var(--accent-tint-border);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -26,71 +57,89 @@
   list-style: none;
 }
 
-/* Receipt row (docs/DESIGN.md): Surface, 16px radius, 12px × 14px padding. */
-.row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+/* A confirmed row and its digital receipt share one card. */
+.card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
-  color: inherit;
-  text-decoration: none;
 }
 
-/* Clickable: the border lightens on hover; nothing moves. */
+/* Receipt row (docs/DESIGN.md): 12px × 14px padding; date block, store, amount and status. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--radius-panel);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+li.card.row {
+  cursor: default;
+}
+
+/* An unconfirmed row is a link with its own card; the border lightens on hover. */
 .link {
+  background: var(--surface);
+  border: 1px solid var(--border);
   transition: border-color var(--transition);
 }
 .link:hover {
   border-color: var(--border-hover);
 }
 
-.thumb {
+.day {
   flex: none;
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: var(--radius-small);
-  background: var(--surface-raised);
-  color: var(--text-muted);
-}
-
-.details {
-  flex: 1;
-  min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  width: 40px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
-.title {
-  color: var(--text-heading);
+.month {
+  font-size: 11px;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 
-.meta {
-  color: var(--text-muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
+.date {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.store {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+.unknown {
+  color: var(--text-muted);
 }
 
 .end {
   flex: none;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
 }
 
-.total {
-  color: var(--text-heading);
+.amount {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  color: var(--text-heading);
 }

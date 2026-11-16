@@ -1,5 +1,8 @@
 import { createBrowserRouter } from "react-router";
 import { CaptureScreen } from "../features/capture/CaptureScreen.tsx";
+import { LibraryScreen } from "../features/library/LibraryScreen.tsx";
+import { StoreScreen } from "../features/library/StoreScreen.tsx";
+import { StoresScreen } from "../features/library/StoresScreen.tsx";
 import { ComingLater } from "../features/placeholders/ComingLater.tsx";
 import { ReceiptScreen } from "../features/receipts/ReceiptScreen.tsx";
 import { ReceiptsScreen } from "../features/receipts/ReceiptsScreen.tsx";
@@ -19,14 +22,22 @@ export const router = createBrowserRouter([
         path: "analytics",
         element: (
           <ComingLater title="Analytics">
-            Monthly breakdowns by store, item and category arrive in Stage 6, and trends in Stage 7.
+            Monthly breakdowns by store, item and category arrive in Stage 6, trends in Stage 7, and search
+            and filters in Stage 9.
           </ComingLater>
         ),
       },
       {
-        path: "search",
-        element: <ComingLater title="Search">Search, filters and date ranges arrive in Stage 9.</ComingLater>,
+        path: "budget",
+        element: (
+          <ComingLater title="Budget">
+            Spending limits on items, tags and categories, with alerts, arrive in Stage 6.
+          </ComingLater>
+        ),
       },
+      { path: "library", element: <LibraryScreen /> },
+      { path: "library/stores", element: <StoresScreen /> },
+      { path: "library/stores/:id", element: <StoreScreen /> },
       { path: "settings", element: <SettingsScreen /> },
       {
         path: "*",

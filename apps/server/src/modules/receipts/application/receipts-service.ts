@@ -1,16 +1,37 @@
-import type { ExtractedReceipt, ReceiptSummary } from "@snaptrack/contracts";
+import type {
+  ConfirmReceiptInput,
+  ConsistencyWarning,
+  ExtractedReceipt,
+  IdentifierAnswer,
+  IdentifierQuestion,
+  LearningNotice,
+  ReceiptDetail,
+  ReceiptDraft,
+  ReceiptSummary,
+  StoreChoice,
+  StoreRef,
+} from "@snaptrack/contracts";
 import { err, newId, ok, sha256Hex, type Id, type Result, type Transaction } from "@snaptrack/core";
+import { checkConsistency } from "../domain/consistency.ts";
 import { fromExtraction, hasUsableAmounts } from "../domain/extracted-data.ts";
 import { detectImageFormat } from "../domain/image-format.ts";
 import { receiptImageKeys } from "../domain/image-keys.ts";
 import { planStoredImage, thumbnailSize } from "../domain/image-plan.ts";
 import { decodeCursor, encodeCursor, normalizeTimestamp } from "../domain/list-cursor.ts";
-import { EXTRACTION_STATUSES, type ReceiptImage, type ReceiptWithImages } from "../domain/receipt.ts";
+import {
+  EXTRACTION_STATUSES,
+  type ReceiptImage,
+  type ReceiptRecord,
+  type ReceiptWithImages,
+} from "../domain/receipt.ts";
+import { asLineItems, dataFromDraft, draftOf, linesFromDraft, receiptAmount } from "../domain/review.ts";
 import type {
   FileStore,
   ImageConverter,
   ReceiptRepository,
+  ReceiptStore,
   ReceiptUploadedListener,
+  StoreCatalog,
   UserDirectory,
 } from "../ports.ts";
 
@@ -19,6 +40,7 @@ export interface ReceiptsDeps {
   files: FileStore;
   converter: ImageConverter;
   users: UserDirectory;
+  catalog: StoreCatalog;
   transaction: Transaction;
   /** Told about each new receipt in the transaction that saves it. */
   onUploaded?: ReceiptUploadedListener;
@@ -33,6 +55,29 @@ export interface PutReceiptCommand {
 
 export type PutReceiptError = { kind: "unsupported-image"; position: number };
 export type ListReceiptsError = { kind: "invalid-cursor" };
+export type ReceiptNotFound = { kind: "receipt-not-found" };
+export type ConfirmError =
+  | ReceiptNotFound
+  | { kind: "store-not-found" }
+  | { kind: "name-taken" }
+  | { kind: "receipt-changed" }
+  | { kind: "needs-answers"; questions: IdentifierQuestion[] };
+
+export interface ConfirmResult {
+  receipt: ReceiptDetail;
+  notices: LearningNotice[];
+  /** Other receipts with no store that would now be matched; offered to the user, not applied. */
+  rematchCount: number;
+}
+
+/** Thrown inside a transaction to undo it, carrying the error to return. Never escapes `confirm`. */
+class Undo extends Error {
+  readonly error: ConfirmError;
+  constructor(error: ConfirmError) {
+    super(error.kind);
+    this.error = error;
+  }
+}
 
 export type ImageVariant = "image" | "thumbnail";
 
@@ -51,18 +96,80 @@ export type ReceiptsService = ReturnType<typeof createReceiptsService>;
 export function createReceiptsService(deps: ReceiptsDeps) {
   function toSummaries(rows: readonly ReceiptWithImages[]): ReceiptSummary[] {
     const names = deps.users.displayNames(rows.map((row) => row.receipt.loggedByUserId));
+    const stores = deps.catalog.storeRefs(
+      rows.flatMap((row) => (row.receipt.storeId === null ? [] : [row.receipt.storeId])),
+    );
     return rows.map(({ receipt, images }) => ({
       id: receipt.id,
       status: receipt.status,
       source: receipt.source,
       capturedAt: receipt.capturedAt,
-      totalCents: receipt.totalCents,
+      purchasedAt: receipt.purchasedAt,
+      totalCents: receiptAmount(receipt),
+      store: (receipt.storeId === null ? undefined : stores.get(receipt.storeId)) ?? null,
       loggedBy: {
         id: receipt.loggedByUserId,
         displayName: names.get(receipt.loggedByUserId) ?? UNKNOWN_USER,
       },
       images: images.map((image) => ({ id: image.id, position: image.position })),
     }));
+  }
+
+  function warningsFor(record: ReceiptRecord, draft: ReceiptDraft): ConsistencyWarning[] {
+    return checkConsistency(
+      dataFromDraft(draft, record.data.rawText),
+      asLineItems(linesFromDraft(draft.lines)),
+      new Date(record.createdAt),
+    );
+  }
+
+  function detailOf(record: ReceiptRecord): ReceiptDetail {
+    const [summary] = toSummaries([record]);
+    if (summary === undefined) throw new Error(`No summary for receipt ${record.receipt.id}`);
+    const confirmedBy =
+      record.confirmedByUserId === null
+        ? null
+        : {
+            id: record.confirmedByUserId,
+            displayName:
+              deps.users.displayNames([record.confirmedByUserId]).get(record.confirmedByUserId) ??
+              UNKNOWN_USER,
+          };
+    const review =
+      record.receipt.storeId === null ? deps.catalog.reviewStore(record.data.storeEvidence) : undefined;
+    const draft = draftOf(record.data, record.note, record.lines);
+    return {
+      ...summary,
+      updatedAt: record.updatedAt,
+      storeMatchedBy: record.storeMatchedBy,
+      storeMatch: record.storeMatch,
+      storeIssue: review?.issue ?? null,
+      storeSuggestions: review?.suggestions ?? [],
+      draft,
+      rawText: record.data.rawText,
+      confirmedAt: record.confirmedAt,
+      confirmedBy,
+      warnings: warningsFor(record, draft),
+    };
+  }
+
+  /** The store a person chose, creating a new one if asked. Inside the confirm's transaction. */
+  function resolveStore(choice: StoreChoice): StoreRef {
+    if (choice.kind === "existing") {
+      const store = deps.catalog.findStore(choice.storeId);
+      if (store === undefined) throw new Undo({ kind: "store-not-found" });
+      return store;
+    }
+    const created = deps.catalog.createStore(choice.name);
+    if (!created.ok) throw new Undo({ kind: "name-taken" });
+    return created.value;
+  }
+
+  /** How many receipts with no store would be matched now. */
+  function countRematchable(): number {
+    return deps.receipts
+      .listUnidentified()
+      .filter((receipt) => deps.catalog.identifyStore(receipt.evidence) !== undefined).length;
   }
 
   function summaryOf(id: Id): ReceiptSummary | undefined {
@@ -142,7 +249,6 @@ export function createReceiptsService(deps: ReceiptsDeps) {
           source: "photo",
           status: "uploaded",
           capturedAt: normalizeTimestamp(command.capturedAt),
-          totalCents: null,
         } as const;
         // False when another copy of this upload got there first; its files are the ones kept.
         saved = deps.transaction.run(() => {
@@ -162,11 +268,12 @@ export function createReceiptsService(deps: ReceiptsDeps) {
     listReceipts(input: {
       cursor: string | undefined;
       limit: number;
+      status?: "unreviewed" | "review_required" | undefined;
     }): Result<{ receipts: ReceiptSummary[]; nextCursor: string | null }, ListReceiptsError> {
       const after = input.cursor === undefined ? undefined : decodeCursor(input.cursor);
       if (input.cursor !== undefined && after === undefined) return err({ kind: "invalid-cursor" });
       // One extra row says whether there is another page.
-      const rows = deps.receipts.list({ after, limit: input.limit + 1 });
+      const rows = deps.receipts.list({ after, limit: input.limit + 1, status: input.status });
       const page = rows.slice(0, input.limit);
       const last = page.at(-1);
       const nextCursor =
@@ -176,8 +283,93 @@ export function createReceiptsService(deps: ReceiptsDeps) {
       return ok({ receipts: toSummaries(page), nextCursor });
     },
 
-    getReceipt(id: Id): ReceiptSummary | undefined {
-      return summaryOf(id);
+    /** Everything about one receipt, with the store suggestions and warnings worked out now. */
+    getReceipt(id: Id): ReceiptDetail | undefined {
+      const record = deps.receipts.findRecord(id);
+      return record && detailOf(record);
+    },
+
+    /** The warnings for a form's current figures. Saves nothing. */
+    checkDraft(id: Id, draft: ReceiptDraft): Result<ConsistencyWarning[], ReceiptNotFound> {
+      const record = deps.receipts.findRecord(id);
+      return record === undefined ? err({ kind: "receipt-not-found" }) : ok(warningsFor(record, draft));
+    },
+
+    /**
+     * Saves a review, marks the receipt confirmed and learns its store's identifiers, all in one
+     * transaction (SPEC.md §6.5, §6.7). Also saves edits to a confirmed receipt. Nothing is saved
+     * if the receipt changed since the form loaded it, or while a question about moving an
+     * identifier has no answer.
+     */
+    confirm(
+      input: ConfirmReceiptInput & { answers: IdentifierAnswer[] },
+      userId: Id,
+    ): Result<ConfirmResult, ConfirmError> {
+      let notices: LearningNotice[];
+      try {
+        notices = deps.transaction.run(() => {
+          const record = deps.receipts.findRecord(input.id);
+          if (record === undefined) throw new Undo({ kind: "receipt-not-found" });
+          if (record.updatedAt !== input.expectedUpdatedAt) throw new Undo({ kind: "receipt-changed" });
+
+          const store = resolveStore(input.store);
+          const previous = { storeId: record.receipt.storeId, matchedBy: record.storeMatchedBy };
+          const learned = deps.catalog.learnFromConfirmedReceipt({
+            receiptId: input.id,
+            storeId: store.id,
+            evidence: input.draft.storeEvidence,
+            previous: {
+              ...previous,
+              alreadyCounted: record.receipt.status === "confirmed" && previous.storeId === store.id,
+            },
+            answers: input.answers,
+          });
+          if (!learned.ok) throw new Undo(learned.error);
+
+          // Confirming the store that was matched keeps the explanation of how it was matched.
+          const matchedBy = record.storeMatchedBy;
+          const receiptStore: ReceiptStore =
+            previous.storeId === store.id && matchedBy !== null
+              ? { storeId: store.id, matchedBy, match: record.storeMatch }
+              : { storeId: store.id, matchedBy: "user", match: null };
+          deps.receipts.saveReview(input.id, {
+            data: dataFromDraft(input.draft, record.data.rawText),
+            lines: linesFromDraft(input.draft.lines),
+            note: input.draft.note,
+            store: receiptStore,
+            confirmedByUserId: userId,
+          });
+          return learned.value.notices;
+        });
+      } catch (error) {
+        if (error instanceof Undo) return err(error.error);
+        throw error;
+      }
+      const record = deps.receipts.findRecord(input.id);
+      if (record === undefined) throw new Error(`Receipt ${input.id} missing right after confirming it`);
+      return ok({ receipt: detailOf(record), notices, rematchCount: countRematchable() });
+    },
+
+    /** How many receipts are waiting for a person (SPEC.md §6.5). */
+    countWaiting(): { unreviewed: number; reviewRequired: number } {
+      return deps.receipts.countWaiting();
+    },
+
+    /**
+     * Sets the store of every unconfirmed receipt with none whose identifiers now match one
+     * (SPEC.md §6.4). Run only when the user agrees. Returns how many changed.
+     */
+    rematch(): number {
+      return deps.transaction.run(() => {
+        let matched = 0;
+        for (const receipt of deps.receipts.listUnidentified()) {
+          const found = deps.catalog.identifyStore(receipt.evidence);
+          if (found === undefined) continue;
+          const store = { storeId: found.storeId, matchedBy: "identifier" as const, match: found.match };
+          if (deps.receipts.setIdentifiedStore(receipt.id, store)) matched++;
+        }
+        return matched;
+      });
     },
 
     /**
@@ -213,7 +405,14 @@ export function createReceiptsService(deps: ReceiptsDeps) {
       const current = deps.receipts.findById(receiptId)?.receipt.status;
       if (current === undefined || !(EXTRACTION_STATUSES as readonly string[]).includes(current))
         return status;
-      deps.receipts.saveExtraction(receiptId, result, status);
+      // Only a known identifier sets the store; anything less waits for a person (SPEC.md §6.4).
+      const found = deps.catalog.identifyStore(result.data.storeEvidence);
+      deps.receipts.saveExtraction(
+        receiptId,
+        result,
+        status,
+        found && { storeId: found.storeId, matchedBy: "identifier", match: found.match },
+      );
       return status;
     },
 

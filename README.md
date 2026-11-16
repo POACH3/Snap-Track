@@ -65,7 +65,7 @@ SnapTrack is built for a single household of a few people on a mix of Android ph
 - Public or multi-household use
 - Digital or PDF receipts and bank or card statement import (may be revisited later)
 - Importing spending history from before the app starts
-- Budgeting, spending limits or alerts
+- Budgeting beyond spending limits and alerts (no envelope budgets, savings goals or forecasts)
 - Currencies other than USD
 - Native mobile apps or app store releases
 

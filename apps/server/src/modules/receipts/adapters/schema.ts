@@ -1,4 +1,4 @@
-import type { Payment, StoreEvidence, TaxLine, TransactionNumber } from "@snaptrack/contracts";
+import type { Payment, StoreEvidence, StoreMatch, TaxLine, TransactionNumber } from "@snaptrack/contracts";
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
@@ -32,11 +32,21 @@ export const receipts = sqliteTable(
     /** Word-for-word transcription of the whole receipt, nothing removed. */
     rawText: text("raw_text"),
     storeEvidence: text("store_evidence", { mode: "json" }).$type<StoreEvidence>(),
+    /** A `stores` id; null until identified or chosen. No foreign key: that table belongs to `catalog`. */
+    storeId: text("store_id"),
+    storeMatchedBy: text("store_matched_by", { enum: ["identifier", "user", "import_format"] }),
+    /** What made an automatic match; null unless matched by identifier. */
+    storeMatch: text("store_match", { mode: "json" }).$type<StoreMatch>(),
+    note: text("note"),
+    /** A `users` id. */
+    confirmedByUserId: text("confirmed_by_user_id"),
+    confirmedAt: text("confirmed_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
     index("receipts_captured_at_id_idx").on(table.capturedAt, table.id),
+    index("receipts_store_idx").on(table.storeId),
     check("receipts_source_check", sql`${table.source} in ('photo', 'manual', 'import')`),
     check(
       "receipts_status_check",

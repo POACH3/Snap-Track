@@ -3,7 +3,7 @@
 // The list is ordered by capture time, which comes from each file's date, so tests find their
 // receipts by content rather than by position.
 import { readFileSync } from "node:fs";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Response } from "@playwright/test";
 
 const fixture = (name: string) => new URL(`./fixtures/${name}`, import.meta.url).pathname;
 const JPEGS = ["receipt-a.jpg", "receipt-b.jpg", "receipt-c.jpg"].map(fixture);
@@ -30,6 +30,17 @@ async function receiptCount(page: Page): Promise<number> {
   return receiptRows(page).count();
 }
 
+/** The id of the receipt an upload saved, from the server's reply. */
+async function receiptId(response: Promise<Response>): Promise<string> {
+  const body = (await (await response).json()) as { json?: { receipt?: { id?: string } } };
+  const id = body.json?.receipt?.id;
+  if (id === undefined) throw new Error("upload reply has no receipt id");
+  return id;
+}
+
+const uploadReply = (page: Page) =>
+  page.waitForResponse((response) => response.url().includes("/rpc/receipts/put") && response.ok());
+
 async function waitForSaved(page: Page, times = 1) {
   await expect(page.getByRole("status").filter({ hasText: "Receipt saved." })).toHaveCount(times, {
     timeout: 30_000,
@@ -42,9 +53,13 @@ test.beforeEach(async ({ page }) => {
 
 // Each project in playwright.config.ts runs only the tests tagged for its layout.
 test.describe("desktop", { tag: "@desktop" }, () => {
-  test("shows side navigation, not the tab bar", async ({ page }) => {
+  test("shows side navigation with the profile and Upload receipt, not the tab bar", async ({ page }) => {
     const nav = page.getByRole("navigation", { name: "Main" });
-    await expect(nav.getByRole("button", { name: "Upload images" })).toBeVisible();
+    await expect(nav.getByRole("button", { name: "Upload receipt" })).toBeVisible();
+    await expect(nav.getByRole("button", { name: "Profile: Pat Tester" })).toBeVisible();
+    for (const section of ["Receipts", "Analytics", "Budget", "Library", "Settings"]) {
+      await expect(nav.getByRole("link", { name: section, exact: true })).toBeVisible();
+    }
     await expect(nav.getByRole("button", { name: "Snap receipt" })).toBeHidden();
   });
 
@@ -52,15 +67,17 @@ test.describe("desktop", { tag: "@desktop" }, () => {
     page,
   }) => {
     const before = await receiptCount(page);
-    await page.getByRole("button", { name: "Upload images" }).click();
+    await page.getByRole("button", { name: "Upload receipt" }).click();
     const chooser = page.waitForEvent("filechooser");
     await page.getByTestId("drop-zone").getByRole("button", { name: "Upload images" }).click();
+    const reply = uploadReply(page);
     await (await chooser).setFiles(JPEGS);
 
     await waitForSaved(page, 3);
     await expect(receiptRows(page)).toHaveCount(before + 3);
-    const singles = receiptRows(page).filter({ hasText: "Pat Tester · 1 photo" });
-    expect(await singles.count()).toBeGreaterThanOrEqual(3);
+    await page.goto(`/receipts/${await receiptId(reply)}`);
+    await expect(page.getByText("Logged by Pat Tester").first()).toBeVisible();
+    await expect(page.getByRole("img", { name: "Photo 1 of 1" })).toBeVisible();
   });
 
   test("a long receipt in three photos with Add another photo becomes one receipt, in order", async ({
@@ -80,14 +97,15 @@ test.describe("desktop", { tag: "@desktop" }, () => {
         page.getByRole("list", { name: "Photos of this receipt" }).getByRole("listitem"),
       ).toHaveCount(index + 1);
     }
+    const reply = uploadReply(page);
     await page.getByRole("button", { name: "Done" }).click();
     await waitForSaved(page);
 
     await page.getByRole("link", { name: "Receipts", exact: true }).click();
     await expect(receiptRows(page)).toHaveCount(before + 1);
-    await receiptRows(page).filter({ hasText: "3 photos" }).first().click();
+    await page.goto(`/receipts/${await receiptId(reply)}`);
 
-    const images = page.getByRole("list", { name: "Photos of this receipt" }).getByRole("img");
+    const images = page.getByRole("group", { name: /Receipt photos/ }).getByRole("img");
     await expect(images).toHaveCount(3);
     for (const [index, width] of JPEG_WIDTHS.entries()) {
       const image = images.nth(index);
@@ -108,17 +126,11 @@ test.describe("desktop", { tag: "@desktop" }, () => {
     }, heic);
     await page.getByTestId("drop-zone").dispatchEvent("drop", { dataTransfer });
     await expect(page.getByText("No preview; uploads as is")).toBeVisible();
+    const reply = uploadReply(page);
     await page.getByRole("button", { name: "Done" }).click();
     await waitForSaved(page);
 
-    // A file made in the page is dated now, so this receipt is the newest.
-    await page.getByRole("link", { name: "Receipts", exact: true }).click();
-    // Thumbnails are decorative (alt=""), so they're found as elements, not by role.
-    const thumbnail = receiptRows(page).first().locator("img");
-    await expect
-      .poll(() => thumbnail.evaluate((img: HTMLImageElement) => img.naturalWidth))
-      .toBeGreaterThan(0);
-    await receiptRows(page).first().click();
+    await page.goto(`/receipts/${await receiptId(reply)}`);
     const image = page.getByRole("img", { name: "Photo 1 of 1" });
     await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(800);
   });
@@ -126,9 +138,12 @@ test.describe("desktop", { tag: "@desktop" }, () => {
 
 test.describe("phone", { tag: "@phone" }, () => {
   test("shows the tab bar with Snap, not the side navigation", async ({ page }) => {
-    const nav = page.getByRole("navigation", { name: "Main" });
+    const nav = page.getByRole("navigation", { name: "Main" }).filter({ visible: true });
     await expect(nav.getByRole("button", { name: "Snap receipt" })).toBeVisible();
-    await expect(nav.getByRole("button", { name: "Upload images" })).toBeHidden();
+    for (const section of ["Receipts", "Analytics", "Library", "Settings"]) {
+      await expect(nav.getByRole("link", { name: section, exact: true })).toBeVisible();
+    }
+    await expect(page.getByRole("button", { name: "Upload receipt" })).toBeHidden();
   });
 
   test("Snap takes a photo, and Done uploads it as a receipt", async ({ page }) => {
@@ -146,7 +161,6 @@ test.describe("phone", { tag: "@phone" }, () => {
 
     await page.getByRole("link", { name: "Receipts", exact: true }).click();
     await expect(receiptRows(page)).toHaveCount(before + 1);
-    await expect(receiptRows(page).filter({ hasText: "Pat Tester · 1 photo" }).first()).toBeVisible();
   });
 
   test("leaving the capture screen uploads the open receipt", async ({ page }) => {

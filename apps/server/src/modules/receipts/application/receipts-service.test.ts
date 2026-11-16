@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { toDrizzle, type Sqlite } from "../../../platform/db/connection.ts";
 import { SqliteTransaction } from "../../../platform/db/sqlite-transaction.ts";
 import { createTestDatabase } from "../../../platform/db/testing/test-database.ts";
+import { createCatalogModule } from "../../catalog/index.ts";
 import { SqliteReceiptRepository } from "../adapters/sqlite-receipt-repository.ts";
 import { detectImageFormat } from "../domain/image-format.ts";
 import { FakeImageConverter } from "../testing/fake-image-converter.ts";
@@ -32,12 +33,14 @@ beforeEach(() => {
   files = new InMemoryFileStore();
   converter = new FakeImageConverter();
   const clock = new FakeClock();
+  const transaction = new SqliteTransaction(sqlite);
   service = createReceiptsService({
     receipts: new SqliteReceiptRepository(toDrizzle(sqlite), clock),
     files,
     converter,
     users,
-    transaction: new SqliteTransaction(sqlite),
+    catalog: createCatalogModule({ db: toDrizzle(sqlite), clock, transaction }).service,
+    transaction,
   });
 });
 

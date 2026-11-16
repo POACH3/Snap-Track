@@ -50,3 +50,13 @@
 .fullWidth {
   width: 100%;
 }
+
+/* Destructive: red tint, red border and text; a stronger tint on hover. */
+.danger {
+  background: var(--danger-tint);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+}
