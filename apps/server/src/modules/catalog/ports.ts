@@ -1,6 +1,7 @@
-import type { IdentifierState, StoreIdentifierType, StoreRef } from "@snaptrack/contracts";
+import type { IdentifierState, ItemRef, StoreIdentifierType, StoreRef } from "@snaptrack/contracts";
 import type { Id } from "@snaptrack/core";
 import type { SavedIdentifier } from "./domain/identify-store.ts";
+import type { LineIdentifier, SavedItemIdentifier } from "./domain/items.ts";
 import type { KnownStore } from "./domain/suggestions.ts";
 
 /** A saved identifier with its history, for Library › Stores. */
@@ -45,6 +46,38 @@ export interface StoreIdentifierRepository {
   markSeen(id: Id): void;
   /** Now belongs to `storeId`, counted afresh from `receiptId` (null when moved by hand). */
   move(id: Id, storeId: Id, receiptId: Id | null): void;
+  setState(id: Id, state: IdentifierState): void;
+  remove(id: Id): void;
+}
+
+/** A saved item identifier with its history and its store's name, for Library › Items. */
+export interface ItemIdentifierRow extends SavedItemIdentifier {
+  readonly storeName: string | null;
+  readonly timesSeen: number;
+  readonly lastSeenAt: string | null;
+}
+
+export interface ItemRepository {
+  findById(id: Id): ItemRef | undefined;
+  findByIds(ids: readonly Id[]): ItemRef[];
+  insert(item: ItemRef): void;
+  /** Sets a person's name; it is never overwritten by automation after this. */
+  rename(id: Id, name: string): void;
+  /** Names containing `query` (ignoring case), alphabetically, with their identifier counts. */
+  search(query: string, limit: number): { item: ItemRef; identifierCount: number }[];
+  /** Every item's id and name, for similar-name suggestions. */
+  all(): ItemRef[];
+}
+
+export interface ItemIdentifierRepository {
+  /** Every saved identifier, of any type and state, whose normalized value is one of `values`. */
+  findByValues(values: readonly string[]): ItemIdentifierRow[];
+  findById(id: Id): ItemIdentifierRow | undefined;
+  /** In the order they were first saved. */
+  listForItem(itemId: Id): ItemIdentifierRow[];
+  insert(identifier: LineIdentifier & { itemId: Id; firstReceiptId: Id | null }): void;
+  markSeen(id: Id): void;
+  move(id: Id, itemId: Id, receiptId: Id | null): void;
   setState(id: Id, state: IdentifierState): void;
   remove(id: Id): void;
 }

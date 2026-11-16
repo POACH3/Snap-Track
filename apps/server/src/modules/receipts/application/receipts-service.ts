@@ -1,5 +1,5 @@
 import type {
-  ConfirmReceiptInput,
+  ConfirmReceiptRequest,
   ConsistencyWarning,
   ExtractedReceipt,
   IdentifierAnswer,
@@ -24,14 +24,21 @@ import {
   type ReceiptRecord,
   type ReceiptWithImages,
 } from "../domain/receipt.ts";
-import { asLineItems, dataFromDraft, draftOf, linesFromDraft, receiptAmount } from "../domain/review.ts";
+import {
+  asLineItems,
+  dataFromDraft,
+  draftOf,
+  linesFromDraft,
+  receiptAmount,
+  type ReviewedLine,
+} from "../domain/review.ts";
 import type {
   FileStore,
   ImageConverter,
   ReceiptRepository,
   ReceiptStore,
   ReceiptUploadedListener,
-  StoreCatalog,
+  Catalog,
   UserDirectory,
 } from "../ports.ts";
 
@@ -40,7 +47,7 @@ export interface ReceiptsDeps {
   files: FileStore;
   converter: ImageConverter;
   users: UserDirectory;
-  catalog: StoreCatalog;
+  catalog: Catalog;
   transaction: Transaction;
   /** Told about each new receipt in the transaction that saves it. */
   onUploaded?: ReceiptUploadedListener;
@@ -68,6 +75,8 @@ export interface ConfirmResult {
   notices: LearningNotice[];
   /** Other receipts with no store that would now be matched; offered to the user, not applied. */
   rematchCount: number;
+  /** Earlier lines with no item that would now be matched; offered with `rematchCount`. */
+  itemRematchCount: number;
 }
 
 /** Thrown inside a transaction to undo it, carrying the error to return. Never escapes `confirm`. */
@@ -137,7 +146,17 @@ export function createReceiptsService(deps: ReceiptsDeps) {
           };
     const review =
       record.receipt.storeId === null ? deps.catalog.reviewStore(record.data.storeEvidence) : undefined;
-    const draft = draftOf(record.data, record.note, record.lines);
+    const items = deps.catalog.itemRefs(
+      record.lines.flatMap((line) => (line.itemId === null ? [] : [line.itemId])),
+    );
+    // Lines with no item get what to offer, worked out now with the identifiers known now.
+    const open = record.lines.filter((line) => line.itemId === null);
+    const offered = deps.catalog.suggestLines(
+      record.receipt.storeId,
+      open.map((line) => ({ ...line, suggestedName: line.suggestedItemName })),
+    );
+    const suggestions = new Map(open.map((line, index) => [line.id, offered[index] ?? null]));
+    const draft = draftOf(record.data, record.note, record.lines, items, suggestions);
     return {
       ...summary,
       updatedAt: record.updatedAt,
@@ -163,6 +182,48 @@ export function createReceiptsService(deps: ReceiptsDeps) {
     const created = deps.catalog.createStore(choice.name);
     if (!created.ok) throw new Undo({ kind: "name-taken" });
     return created.value;
+  }
+
+  /**
+   * Each line's item for a confirm: the one chosen, a new one created now (named as the form says),
+   * or, for a line with none, the item its identifiers match at `storeId`; else none.
+   */
+  function resolveItems(record: ReceiptRecord, draft: ReceiptDraft, storeId: Id): ReviewedLine[] {
+    const stored = new Map(record.lines.map((line) => [line.id, line]));
+    const lines = linesFromDraft(draft.lines).map((line, index) => {
+      const choice = draft.lines[index]?.item ?? null;
+      if (choice === null) return line;
+      if (choice.kind === "existing") {
+        return { ...line, itemId: deps.catalog.findItem(choice.itemId)?.id ?? null };
+      }
+      const suggested = line.id === undefined ? null : (stored.get(line.id)?.suggestedItemName ?? null);
+      const source = choice.name === suggested ? "model" : choice.name === line.rawName ? "printed" : "user";
+      return { ...line, itemId: deps.catalog.createItem(choice.name, source).id };
+    });
+    const open = lines.flatMap((line, index) => (line.itemId === null ? [index] : []));
+    const found = deps.catalog.identifyLines(
+      storeId,
+      open.map((index) => lines[index] as ReviewedLine),
+    );
+    open.forEach((index, i) => {
+      const item = found[i];
+      const line = lines[index];
+      if (item !== undefined && line !== undefined) lines[index] = { ...line, itemId: item.id };
+    });
+    return lines;
+  }
+
+  /** How many earlier lines with no item would be matched now. */
+  function countItemRematchable(): number {
+    return deps.receipts
+      .listLinesWithoutItem()
+      .reduce(
+        (n, receipt) =>
+          n +
+          deps.catalog.identifyLines(receipt.storeId, receipt.lines).filter((item) => item !== undefined)
+            .length,
+        0,
+      );
   }
 
   /** How many receipts with no store would be matched now. */
@@ -302,7 +363,7 @@ export function createReceiptsService(deps: ReceiptsDeps) {
      * identifier has no answer.
      */
     confirm(
-      input: ConfirmReceiptInput & { answers: IdentifierAnswer[] },
+      input: ConfirmReceiptRequest & { answers: IdentifierAnswer[] },
       userId: Id,
     ): Result<ConfirmResult, ConfirmError> {
       let notices: LearningNotice[];
@@ -314,14 +375,29 @@ export function createReceiptsService(deps: ReceiptsDeps) {
 
           const store = resolveStore(input.store);
           const previous = { storeId: record.receipt.storeId, matchedBy: record.storeMatchedBy };
+          const lines = resolveItems(record, input.draft, store.id);
+          const wasConfirmed = record.receipt.status === "confirmed";
+          const before = new Map(record.lines.map((line) => [line.id, line.itemId]));
           const learned = deps.catalog.learnFromConfirmedReceipt({
             receiptId: input.id,
             storeId: store.id,
             evidence: input.draft.storeEvidence,
             previous: {
               ...previous,
-              alreadyCounted: record.receipt.status === "confirmed" && previous.storeId === store.id,
+              alreadyCounted: wasConfirmed && previous.storeId === store.id,
             },
+            lines: lines.flatMap((line) =>
+              line.itemId === null
+                ? []
+                : [
+                    {
+                      ...line,
+                      itemId: line.itemId,
+                      alreadyCounted:
+                        wasConfirmed && line.id !== undefined && before.get(line.id) === line.itemId,
+                    },
+                  ],
+            ),
             answers: input.answers,
           });
           if (!learned.ok) throw new Undo(learned.error);
@@ -334,7 +410,7 @@ export function createReceiptsService(deps: ReceiptsDeps) {
               : { storeId: store.id, matchedBy: "user", match: null };
           deps.receipts.saveReview(input.id, {
             data: dataFromDraft(input.draft, record.data.rawText),
-            lines: linesFromDraft(input.draft.lines),
+            lines,
             note: input.draft.note,
             store: receiptStore,
             confirmedByUserId: userId,
@@ -347,7 +423,12 @@ export function createReceiptsService(deps: ReceiptsDeps) {
       }
       const record = deps.receipts.findRecord(input.id);
       if (record === undefined) throw new Error(`Receipt ${input.id} missing right after confirming it`);
-      return ok({ receipt: detailOf(record), notices, rematchCount: countRematchable() });
+      return ok({
+        receipt: detailOf(record),
+        notices,
+        rematchCount: countRematchable(),
+        itemRematchCount: countItemRematchable(),
+      });
     },
 
     /** How many receipts are waiting for a person (SPEC.md §6.5). */
@@ -356,10 +437,11 @@ export function createReceiptsService(deps: ReceiptsDeps) {
     },
 
     /**
-     * Sets the store of every unconfirmed receipt with none whose identifiers now match one
-     * (SPEC.md §6.4). Run only when the user agrees. Returns how many changed.
+     * Sets the store of every unconfirmed receipt with none whose identifiers now match one, then
+     * the item of every earlier line with none whose identifiers now match one (SPEC.md §6.4). Run
+     * only when the user agrees. Returns how many of each changed.
      */
-    rematch(): number {
+    rematch(): { matched: number; items: number } {
       return deps.transaction.run(() => {
         let matched = 0;
         for (const receipt of deps.receipts.listUnidentified()) {
@@ -368,8 +450,28 @@ export function createReceiptsService(deps: ReceiptsDeps) {
           const store = { storeId: found.storeId, matchedBy: "identifier" as const, match: found.match };
           if (deps.receipts.setIdentifiedStore(receipt.id, store)) matched++;
         }
-        return matched;
+        let items = 0;
+        for (const receipt of deps.receipts.listLinesWithoutItem()) {
+          const found = deps.catalog.identifyLines(receipt.storeId, receipt.lines);
+          receipt.lines.forEach((line, index) => {
+            const item = found[index];
+            if (item !== undefined && deps.receipts.setLineItem(line.id, item.id)) items++;
+          });
+        }
+        return { matched, items };
       });
+    },
+
+    /** An item's latest purchases, newest first, for its Library page. */
+    itemPurchases(itemId: Id, limit: number) {
+      const rows = deps.receipts.itemPurchases(itemId, limit);
+      const stores = deps.catalog.storeRefs(
+        rows.flatMap((row) => (row.storeId === null ? [] : [row.storeId])),
+      );
+      return rows.map(({ storeId, ...row }) => ({
+        ...row,
+        store: (storeId === null ? undefined : stores.get(storeId)) ?? null,
+      }));
     },
 
     /**
@@ -407,11 +509,14 @@ export function createReceiptsService(deps: ReceiptsDeps) {
         return status;
       // Only a known identifier sets the store; anything less waits for a person (SPEC.md §6.4).
       const found = deps.catalog.identifyStore(result.data.storeEvidence);
+      // Items too: by barcode always, by code and printed name once the store is known (§6.4 step 2).
+      const items = deps.catalog.identifyLines(found?.storeId ?? null, result.lines);
       deps.receipts.saveExtraction(
         receiptId,
         result,
         status,
         found && { storeId: found.storeId, matchedBy: "identifier", match: found.match },
+        items.map((item) => item?.id ?? null),
       );
       return status;
     },

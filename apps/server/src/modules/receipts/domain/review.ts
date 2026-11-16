@@ -1,10 +1,21 @@
-import type { DraftLine, ReceiptDetail, ReceiptDraft, StoreEvidence } from "@snaptrack/contracts";
+import type {
+  DraftLine,
+  ItemRef,
+  LineItemSuggestion,
+  ReceiptDetail,
+  ReceiptDraft,
+  StoreEvidence,
+} from "@snaptrack/contracts";
 import type { Cents, Id } from "@snaptrack/core";
 import type { LineItem, ReceiptData } from "./extracted-data.ts";
 import type { StoredLine } from "./receipt.ts";
 
 /** A line as the review form saves it: an existing line keeps its id. */
-export type ReviewedLine = Omit<LineItem, "suggestedItemName"> & { readonly id?: Id };
+export type ReviewedLine = Omit<LineItem, "suggestedItemName"> & {
+  readonly id?: Id;
+  /** Resolved before saving: a chosen item, a new one just created, or a match. */
+  readonly itemId: Id | null;
+};
 
 /** Store details as printed, when nothing was read. */
 export const EMPTY_EVIDENCE: StoreEvidence = {
@@ -63,6 +74,7 @@ export function dataFromDraft(draft: ReceiptDraft, rawText: string | null): Rece
 export function linesFromDraft(lines: readonly DraftLine[]): ReviewedLine[] {
   return lines.map((line, position) => ({
     ...(line.id === undefined ? {} : { id: line.id }),
+    itemId: line.item?.kind === "existing" ? line.item.itemId : null,
     position,
     kind: line.kind,
     rawName: line.rawName,
@@ -76,11 +88,13 @@ export function linesFromDraft(lines: readonly DraftLine[]): ReviewedLine[] {
   }));
 }
 
-/** What the review form starts from. */
+/** What the review form starts from, with each line's item and, for a line with none, what to offer. */
 export function draftOf(
   data: ReceiptData,
   note: string | null,
   lines: readonly StoredLine[],
+  items: ReadonlyMap<Id, ItemRef>,
+  suggestions: ReadonlyMap<Id, LineItemSuggestion | null>,
 ): ReceiptDetail["draft"] {
   return {
     purchasedAt: data.purchasedAt,
@@ -98,6 +112,9 @@ export function draftOf(
     note,
     lines: lines.map((line) => ({
       id: line.id,
+      item: line.itemId === null ? null : { kind: "existing" as const, itemId: line.itemId },
+      itemRef: line.itemId === null ? null : (items.get(line.itemId) ?? null),
+      itemSuggestion: line.itemId === null ? (suggestions.get(line.id) ?? null) : null,
       kind: line.kind,
       rawName: line.rawName,
       itemCode: line.itemCode,

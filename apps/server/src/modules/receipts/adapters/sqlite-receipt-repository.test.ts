@@ -86,12 +86,12 @@ describe("SqliteReceiptRepository", () => {
         ],
       }),
     );
-    repo.saveExtraction(receipt.id, first, "unreviewed", undefined);
+    repo.saveExtraction(receipt.id, first, "unreviewed", undefined, []);
     expect(repo.findById(receipt.id)?.receipt).toMatchObject({ status: "unreviewed", totalCents: 1023 });
     const second = fromExtraction(
       ExtractedReceipt.parse({ total: 5, lines: [{ printedName: "C", amount: 5 }] }),
     );
-    repo.saveExtraction(receipt.id, second, "unreviewed", undefined);
+    repo.saveExtraction(receipt.id, second, "unreviewed", undefined, []);
     const names = sqlite.prepare("select raw_name from line_items order by position").all() as {
       raw_name: string;
     }[];
@@ -107,7 +107,7 @@ describe("SqliteReceiptRepository", () => {
         store: { printedName: "SHOP" },
       }),
     );
-    repo.saveExtraction(receipt.id, result, "review_required", undefined);
+    repo.saveExtraction(receipt.id, result, "review_required", undefined, []);
     const row = sqlite.prepare("select payments, store_evidence from receipts").get() as {
       payments: string;
       store_evidence: string;

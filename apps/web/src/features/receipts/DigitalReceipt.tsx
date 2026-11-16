@@ -39,7 +39,9 @@ export function DigitalReceipt({ id }: { id: string }) {
         <ul className={styles.lines} aria-label="Items">
           {draft.lines.map((line) => (
             <li key={line.id}>
-              <span className={styles.name}>{line.rawName ?? (line.kind === "fee" ? "Fee" : "Item")}</span>
+              <span className={styles.name}>
+                {line.itemRef?.name ?? line.rawName ?? (line.kind === "fee" ? "Fee" : "Item")}
+              </span>
               <span className={styles.price}>{formatTotal(line.lineTotalCents)}</span>
             </li>
           ))}

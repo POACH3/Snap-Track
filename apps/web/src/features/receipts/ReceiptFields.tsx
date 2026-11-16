@@ -3,11 +3,14 @@ import { ChevronDown, Ellipsis, Plus, Split, Trash2, TriangleAlert, X } from "lu
 import { useId, useState, type ReactNode } from "react";
 import { Button } from "../../shared/ui/Button.tsx";
 import { Modal } from "../../shared/ui/Modal.tsx";
+import { useToast } from "../../shared/ui/toast-context.ts";
+import { useItemSearch, useRenameItem } from "../library/use-items.ts";
 import {
   blankLine,
   newKey,
   splitOf,
   type FormErrors,
+  type FormItem,
   type FormLine,
   type FormState,
 } from "./receipt-form.ts";
@@ -177,14 +180,25 @@ export function ReceiptFields({ form, update, errors, warnings, wide, rawText }:
           const field = (name: string) => `lines.${key}.${name}`;
           return (
             <div key={key} className={wide ? styles.tableRow : styles.lineRow}>
-              <Input
-                label="Printed name"
-                showLabel={false}
-                value={line.rawName}
-                onChange={(rawName) => {
-                  setLine(key, { rawName });
-                }}
-              />
+              <div className={styles.nameCell}>
+                <ItemLabel
+                  line={line}
+                  onOpen={() => {
+                    setOptionsFor(key);
+                  }}
+                  onUse={(item) => {
+                    setLine(key, { item });
+                  }}
+                />
+                <Input
+                  label="Printed name"
+                  showLabel={false}
+                  value={line.rawName}
+                  onChange={(rawName) => {
+                    setLine(key, { rawName });
+                  }}
+                />
+              </div>
               {wide && (
                 <>
                   <Input
@@ -343,6 +357,186 @@ const UNIT_LABEL: Record<(typeof LineUnit.options)[number], string> = {
   fl_oz: "fl oz",
 };
 
+/**
+ * A line's item above its printed text (SPEC.md §6.5): the item's name, a new item to be created,
+ * or, for a line with none, what the server offers with **Use it**. Nothing applies until tapped.
+ */
+function ItemLabel({
+  line,
+  onOpen,
+  onUse,
+}: {
+  line: FormLine;
+  onOpen: () => void;
+  onUse: (item: FormItem) => void;
+}) {
+  if (line.item !== null) {
+    return (
+      <button type="button" className={styles.itemName} onClick={onOpen}>
+        {line.item.kind === "existing" ? line.item.item.name : line.item.name}
+        {line.item.kind === "new" && <span className={styles.itemNew}>new item</span>}
+      </button>
+    );
+  }
+  const offer = line.suggestion;
+  if (offer === null) return null;
+  const [label, name, item]: [string, string, FormItem] =
+    offer.kind === "existing"
+      ? [
+          offer.reason === "identifier" ? "Matches" : "Same as",
+          offer.item.name,
+          { kind: "existing", item: offer.item },
+        ]
+      : ["Name it", offer.name, { kind: "new", name: offer.name }];
+  return (
+    <p className={styles.itemOffer}>
+      <span>
+        {label}: <strong>{name}</strong>
+      </span>
+      <button
+        type="button"
+        className={styles.useIt}
+        aria-label={`Use ${name} for this line`}
+        onClick={() => {
+          onUse(item);
+        }}
+      >
+        Use it
+      </button>
+    </p>
+  );
+}
+
+/**
+ * The line's item: rename it (saved at once, shown on every purchase of it), choose a different
+ * one, create one, or take it off this line (SPEC.md §6.5, §6.7).
+ */
+function ItemSection({ line, onChange }: { line: FormLine; onChange: (item: FormItem) => void }) {
+  const toast = useToast();
+  const rename = useRenameItem();
+  const current = line.item;
+  const [name, setName] = useState(current?.kind === "existing" ? current.item.name : "");
+  const [choosing, setChoosing] = useState(current === null);
+  const [query, setQuery] = useState(current === null ? (line.suggestedName ?? line.rawName) : "");
+  const search = useItemSearch(choosing ? query : "");
+  const results = choosing && query.trim() !== "" ? (search.data?.items ?? []) : [];
+  const exact = results.some((item) => item.name.trim().toLowerCase() === query.trim().toLowerCase());
+
+  return (
+    <section className={styles.itemSection} aria-labelledby={`item-${line.key}`}>
+      <h3 id={`item-${line.key}`} className={styles.subhead}>
+        Item
+      </h3>
+      {current?.kind === "existing" && !choosing && (
+        <div className={styles.renameRow}>
+          <Input
+            label="Name, shown on every purchase of it"
+            value={name}
+            onChange={setName}
+            className={styles.grow}
+          />
+          <Button
+            variant="secondary"
+            busy={rename.isPending}
+            disabled={name.trim() === "" || name.trim() === current.item.name}
+            onClick={() => {
+              rename.mutate(
+                { id: current.item.id, name: name.trim() },
+                {
+                  onSuccess: ({ item }) => {
+                    onChange({ kind: "existing", item });
+                    toast({
+                      kind: "success",
+                      title: "Item renamed.",
+                      detail: `Every purchase of it now shows ${item.name}.`,
+                    });
+                  },
+                  onError: () => {
+                    toast({
+                      kind: "error",
+                      title: "Couldn't rename the item.",
+                      detail: "Check your connection.",
+                    });
+                  },
+                },
+              );
+            }}
+          >
+            Rename
+          </Button>
+        </div>
+      )}
+      {current?.kind === "new" && !choosing && (
+        <Input
+          label="New item's name, created when you confirm"
+          value={current.name}
+          onChange={(next) => {
+            onChange({ kind: "new", name: next });
+          }}
+        />
+      )}
+      {choosing ? (
+        <div className={styles.group}>
+          <Input label="Find an item, or name a new one" value={query} onChange={setQuery} />
+          <ul className={styles.choices} aria-label="Items">
+            {results.map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  className={styles.choice}
+                  onClick={() => {
+                    onChange({ kind: "existing", item });
+                    setName(item.name);
+                    setChoosing(false);
+                  }}
+                >
+                  {item.name}
+                </button>
+              </li>
+            ))}
+            {query.trim() !== "" && !exact && (
+              <li>
+                <button
+                  type="button"
+                  className={styles.choice}
+                  onClick={() => {
+                    onChange({ kind: "new", name: query.trim() });
+                    setChoosing(false);
+                  }}
+                >
+                  <Plus size={16} aria-hidden /> Create "{query.trim()}"
+                </button>
+              </li>
+            )}
+          </ul>
+        </div>
+      ) : (
+        <div className={styles.itemActions}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setChoosing(true);
+              setQuery("");
+            }}
+          >
+            Choose a different item
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              onChange(null);
+              setChoosing(true);
+              setQuery(line.suggestedName ?? line.rawName);
+            }}
+          >
+            Take it off this line
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Everything about one line that the list leaves out, plus split and remove. */
 function LineOptions({
   line,
@@ -366,7 +560,9 @@ function LineOptions({
     <Modal
       open
       size="medium"
-      title={line.rawName === "" ? "Line" : line.rawName}
+      title={
+        line.item?.kind === "existing" ? line.item.item.name : line.rawName === "" ? "Line" : line.rawName
+      }
       onClose={onClose}
       actions={
         <>
@@ -380,6 +576,13 @@ function LineOptions({
         </>
       }
     >
+      <ItemSection
+        line={line}
+        onChange={(item) => {
+          onChange({ item });
+        }}
+      />
+      <h3 className={styles.subhead}>Line</h3>
       <div className={styles.optionsGrid}>
         <Input
           label="Printed name"

@@ -89,6 +89,26 @@ function matchText(receipt: ReceiptDetail): string | null {
  * from `receipt`, the version it was loaded from, and moves to a newer one only while nothing has
  * been changed, so a person's typing is never replaced; confirming from an old version is refused.
  */
+const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
+
+function rematchTitle({ stores, items }: { stores: number; items: number }): string {
+  if (items === 0) return `Match ${count(stores, "another receipt", "other receipts")} too?`;
+  if (stores === 0) return `Match ${count(items, "an earlier purchase", "earlier purchases")} too?`;
+  return "Match the others too?";
+}
+
+function rematchBody({ stores, items }: { stores: number; items: number }): string {
+  const parts = [
+    stores > 0
+      ? `${count(stores, "Another receipt with no store", "receipts with no store")} now match a store you have confirmed.`
+      : "",
+    items > 0
+      ? `${count(items, "An earlier purchase with no item", "earlier purchases with no item")} now match items you've named.`
+      : "",
+  ];
+  return parts.filter(Boolean).join(" ");
+}
+
 function Review({ latest }: { latest: ReceiptDetail }) {
   const [receipt, setReceipt] = useState(latest);
   const wide = useMediaQuery(WIDE);
@@ -109,7 +129,8 @@ function Review({ latest }: { latest: ReceiptDetail }) {
   const [questions, setQuestions] = useState<IdentifierQuestion[] | null>(null);
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
   const [changed, setChanged] = useState(false);
-  const [rematchCount, setRematchCount] = useState(0);
+  const [toRematch, setRematch] = useState({ stores: 0, items: 0 });
+  const rematchCount = toRematch.stores + toRematch.items;
   const leaving = useRef(false);
   const reloading = useRef(false);
   const queryClient = useQueryClient();
@@ -203,8 +224,9 @@ function Review({ latest }: { latest: ReceiptDetail }) {
             detail: `This address is also saved for ${notice.alsoSavedFor.name}. It is now treated as a shared location.`,
           });
         }
-        if (result.rematchCount > 0) setRematchCount(result.rematchCount);
-        else done();
+        if (result.rematchCount + result.itemRematchCount > 0) {
+          setRematch({ stores: result.rematchCount, items: result.itemRematchCount });
+        } else done();
       },
       onError: (error) => {
         if (!isDefinedError(error)) {
@@ -451,8 +473,8 @@ function Review({ latest }: { latest: ReceiptDetail }) {
             {questions.map((q) => (
               <fieldset key={q.key} className={styles.question}>
                 <legend className={styles.questionText}>
-                  The {identifierText(q.identifier)} is saved for <strong>{q.savedFor.name}</strong>. Move it
-                  to <strong>{chosenName}</strong>?
+                  The {identifierText(q.identifier)} is saved for {q.about === "item" ? "the item " : ""}
+                  <strong>{q.savedFor.name}</strong>. Move it to <strong>{q.movingTo}</strong>?
                 </legend>
                 <label className={styles.answer}>
                   <input
@@ -463,7 +485,7 @@ function Review({ latest }: { latest: ReceiptDetail }) {
                       setAnswers((a) => ({ ...a, [q.key]: true }));
                     }}
                   />
-                  Move it to {chosenName}
+                  Move it to {q.movingTo}
                 </label>
                 <label className={styles.answer}>
                   <input
@@ -484,23 +506,24 @@ function Review({ latest }: { latest: ReceiptDetail }) {
 
       <ConfirmModal
         open={rematchCount > 0}
-        title={`Match ${rematchCount === 1 ? "another receipt" : `${rematchCount} other receipts`} too?`}
+        title={rematchTitle(toRematch)}
         confirmLabel={rematchCount === 1 ? "Match it" : "Match them"}
         cancelLabel="Not now"
         busy={rematch.isPending}
         onCancel={() => {
-          setRematchCount(0);
+          setRematch({ stores: 0, items: 0 });
           done();
         }}
         onConfirm={() => {
           rematch.mutate(
             {},
             {
-              onSuccess: ({ matched }) => {
-                toast({
-                  kind: "success",
-                  title: matched === 1 ? "1 receipt matched." : `${matched} receipts matched.`,
-                });
+              onSuccess: ({ matched, items }) => {
+                const parts = [
+                  matched > 0 ? (matched === 1 ? "1 receipt" : `${matched} receipts`) : null,
+                  items > 0 ? (items === 1 ? "1 purchase" : `${items} purchases`) : null,
+                ].filter(Boolean);
+                toast({ kind: "success", title: `${parts.join(" and ") || "Nothing"} matched.` });
               },
               onError: () => {
                 toast({
@@ -510,15 +533,14 @@ function Review({ latest }: { latest: ReceiptDetail }) {
                 });
               },
               onSettled: () => {
-                setRematchCount(0);
+                setRematch({ stores: 0, items: 0 });
                 done();
               },
             },
           );
         }}
       >
-        {rematchCount === 1 ? "Another receipt with no store" : `${rematchCount} receipts with no store`} now
-        match a store you have confirmed. Nothing changes unless you say so.
+        {rematchBody(toRematch)} Nothing changes unless you say so.
       </ConfirmModal>
 
       <ConfirmModal

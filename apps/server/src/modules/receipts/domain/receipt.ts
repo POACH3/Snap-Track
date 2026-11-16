@@ -47,6 +47,8 @@ export interface ReceiptWithImages {
 
 export interface StoredLine extends LineItem {
   readonly id: Id;
+  /** Null until matched or chosen (SPEC.md §6.4 step 2). */
+  readonly itemId: Id | null;
 }
 
 /** Everything stored about one receipt. */

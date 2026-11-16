@@ -39,13 +39,21 @@ export const E2E_REPLIES: Record<number, unknown> = {
     tax: 0.52,
     total: 7.0,
     lines: [
-      { printedName: "WHOLE MILK GAL", amount: 3.49, quantity: 1, unitPrice: 3.49 },
+      {
+        printedName: "WHOLE MILK GAL",
+        itemCode: "4417",
+        amount: 3.49,
+        quantity: 1,
+        unitPrice: 3.49,
+        suggestedName: "Whole milk, 1 gal",
+      },
       { printedName: "SOURDOUGH LOAF", amount: 2.99, quantity: 1, unitPrice: 2.99 },
     ],
     payments: [{ method: "card", cardBrand: "Visa", cardType: "credit", last4: "4821", amount: 7.0 }],
     rawText: "FRESH MART #12\nWHOLE MILK GAL 3.49\nSOURDOUGH LOAF 2.99\nTOTAL 7.00",
   },
-  // review-b.jpg: another Fresh Mart location, sharing only the website.
+  // review-b.jpg: another Fresh Mart location, sharing only the website; the milk is printed
+  // differently but carries the same item code.
   760: {
     store: {
       printedName: "FRESH MART #31",
@@ -56,7 +64,7 @@ export const E2E_REPLIES: Record<number, unknown> = {
     subtotal: 4.0,
     tax: 0,
     total: 4.0,
-    lines: [{ printedName: "BANANAS", amount: 4.0 }],
+    lines: [{ printedName: "WHL MILK 1GAL", itemCode: "4417", amount: 4.0 }],
   },
   // review-phone.jpg: a corner shop, for the phone layout; the subtotal is off by a dollar.
   // (Not 800: the HEIC fixture converts to that width.)

@@ -9,7 +9,14 @@ checked.
 
 ## Open
 
+## Fixed
+
 ### Fee lines can match an item by a shared item code
+
+- **Fixed:** 2026-11-15, branch `stage-4-items` (Stage 4 part 2, `docs/feature-plans/items-plan.md`).
+  Fee lines never match or learn by barcode or code, only by printed name (`lineIdentifiers` in
+  `apps/server/src/modules/catalog/domain/items.ts`; `SPEC.md` §5). Covered by unit tests and a
+  use-case test that reproduces the steps below.
 
 - **Found:** 2026-11-14, while comparing extraction models on a real receipt.
 - **Where:** `SPEC.md` §6.4 step 2 (item matching) and §6.7 (learning from
@@ -29,6 +36,3 @@ checked.
 - **Not checked:** how often stores print shared codes like this; whether any
   other line kinds (e.g. bottle deposits printed with the product's code) hit
   the same problem.
-
-
-## Fixed

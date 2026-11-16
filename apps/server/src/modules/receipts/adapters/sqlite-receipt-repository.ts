@@ -27,7 +27,7 @@ import type {
   StoredLine,
 } from "../domain/receipt.ts";
 import { EMPTY_EVIDENCE } from "../domain/review.ts";
-import type { ReceiptRepository, ReceiptStore, Review } from "../ports.ts";
+import type { ItemPurchase, ReceiptRepository, ReceiptStore, Review } from "../ports.ts";
 import { lineItems, receiptImages, receipts } from "./schema.ts";
 
 type Db = BetterSQLite3Database;
@@ -80,10 +80,12 @@ const toLine = (row: LineRow): StoredLine => ({
   discountCents: row.discountCents,
   taxCode: row.taxCode,
   suggestedItemName: row.suggestedItemName,
+  itemId: row.itemId,
 });
 
 /** A line's columns, apart from its id, receipt and timestamps. */
-const lineColumns = (line: Omit<LineItem, "suggestedItemName">) => ({
+const lineColumns = (line: Omit<LineItem, "suggestedItemName"> & { itemId: Id | null }) => ({
+  itemId: line.itemId,
   position: line.position,
   kind: line.kind,
   rawName: line.rawName,
@@ -228,6 +230,7 @@ export class SqliteReceiptRepository implements ReceiptRepository {
     result: ExtractionResult,
     status: ReceiptStatus,
     store: ReceiptStore | undefined,
+    itemIds: readonly (Id | null)[],
   ): void {
     const now = this.#clock.now().toISOString();
     this.#db
@@ -240,8 +243,9 @@ export class SqliteReceiptRepository implements ReceiptRepository {
       this.#db
         .insert(lineItems)
         .values(
-          result.lines.map((line) => ({
+          result.lines.map((line, index) => ({
             ...line,
+            itemId: itemIds[index] ?? null,
             id: newId(),
             receiptId: id,
             createdAt: now,
@@ -343,6 +347,66 @@ export class SqliteReceiptRepository implements ReceiptRepository {
       .where(and(eq(receipts.id, id), isNull(receipts.storeId), ne(receipts.status, "confirmed")))
       .run();
     return result.changes === 1;
+  }
+
+  listLinesWithoutItem(): {
+    receiptId: Id;
+    storeId: Id | null;
+    lines: { id: Id; kind: "item" | "fee"; rawName: string | null; itemCode: string | null }[];
+  }[] {
+    const rows = this.#db
+      .select({
+        receiptId: lineItems.receiptId,
+        storeId: receipts.storeId,
+        id: lineItems.id,
+        kind: lineItems.kind,
+        rawName: lineItems.rawName,
+        itemCode: lineItems.itemCode,
+      })
+      .from(lineItems)
+      .innerJoin(receipts, eq(receipts.id, lineItems.receiptId))
+      .where(
+        and(
+          isNull(lineItems.itemId),
+          inArray(receipts.status, ["unreviewed", "review_required", "confirmed"]),
+        ),
+      )
+      .orderBy(asc(lineItems.receiptId), asc(lineItems.position))
+      .all();
+    return [...Map.groupBy(rows, (row) => row.receiptId)].map(([receiptId, lines]) => ({
+      receiptId,
+      storeId: lines[0]?.storeId ?? null,
+      lines: lines.map(({ id, kind, rawName, itemCode }) => ({ id, kind, rawName, itemCode })),
+    }));
+  }
+
+  setLineItem(lineId: Id, itemId: Id): boolean {
+    const now = this.#clock.now().toISOString();
+    const result = this.#db
+      .update(lineItems)
+      .set({ itemId, updatedAt: now })
+      .where(and(eq(lineItems.id, lineId), isNull(lineItems.itemId)))
+      .run();
+    return result.changes === 1;
+  }
+
+  itemPurchases(itemId: Id, limit: number): ItemPurchase[] {
+    return this.#db
+      .select({
+        receiptId: receipts.id,
+        purchasedAt: receipts.purchasedAt,
+        capturedAt: receipts.capturedAt,
+        storeId: receipts.storeId,
+        lineTotalCents: lineItems.lineTotalCents,
+        quantityMilli: lineItems.quantityMilli,
+        unit: lineItems.unit,
+      })
+      .from(lineItems)
+      .innerJoin(receipts, eq(receipts.id, lineItems.receiptId))
+      .where(eq(lineItems.itemId, itemId))
+      .orderBy(desc(sql`coalesce(${receipts.purchasedAt}, ${receipts.capturedAt})`), desc(receipts.id))
+      .limit(limit)
+      .all();
   }
 
   findImage(imageId: Id): ReceiptImage | undefined {

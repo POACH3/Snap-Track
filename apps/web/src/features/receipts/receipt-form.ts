@@ -4,6 +4,8 @@
 import type {
   ConsistencyWarning,
   DraftLine,
+  ItemRef,
+  LineItemSuggestion,
   LineUnit,
   ReceiptDetail,
   ReceiptDraft,
@@ -14,10 +16,18 @@ let nextKey = 0;
 /** A key for a row the form adds, so React keeps each row's inputs as rows move. */
 export const newKey = () => `row-${++nextKey}`;
 
+/** A line's item in the form: a known one, a new one to create with the confirm, or none. */
+export type FormItem = { kind: "existing"; item: ItemRef } | { kind: "new"; name: string } | null;
+
 export interface FormLine {
   key: string;
   /** The saved line's id; none for a line added in the form. */
   id?: string | undefined;
+  item: FormItem;
+  /** What the server offered for a line with no item; shown, never sent. */
+  suggestion: LineItemSuggestion | null;
+  /** The model's readable name, the default for a new item. */
+  suggestedName: string | null;
   kind: "item" | "fee";
   rawName: string;
   itemCode: string;
@@ -118,6 +128,9 @@ const orNull = (value: string) => (value.trim() === "" ? null : value.trim());
 export function blankLine(): FormLine {
   return {
     key: newKey(),
+    item: null,
+    suggestion: null,
+    suggestedName: null,
     kind: "item",
     rawName: "",
     itemCode: "",
@@ -188,6 +201,9 @@ export function formFromDraft(draft: ReceiptDetail["draft"]): FormState {
     lines: draft.lines.map((line) => ({
       key: line.id,
       id: line.id,
+      item: line.itemRef === null ? null : { kind: "existing" as const, item: line.itemRef },
+      suggestion: line.itemSuggestion,
+      suggestedName: line.suggestedItemName,
       kind: line.kind,
       rawName: text(line.rawName),
       itemCode: text(line.itemCode),
@@ -224,6 +240,12 @@ export function draftFromForm(form: FormState): { draft: ReceiptDraft } | { erro
     if (quantityMilli === undefined) errors[`lines.${line.key}.quantity`] = "Enter a quantity above zero.";
     return {
       ...(line.id === undefined ? {} : { id: line.id }),
+      item:
+        line.item === null
+          ? null
+          : line.item.kind === "existing"
+            ? { kind: "existing", itemId: line.item.item.id }
+            : { kind: "new", name: line.item.name },
       kind: line.kind,
       rawName: orNull(line.rawName),
       itemCode: orNull(line.itemCode),

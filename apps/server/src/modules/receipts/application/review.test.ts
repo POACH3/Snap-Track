@@ -255,6 +255,7 @@ describe("confirm", () => {
           totalCents: 450,
           lines: [
             {
+              item: null,
               kind: "item",
               rawName: "Milk",
               itemCode: null,
@@ -316,10 +317,10 @@ describe("confirm", () => {
     expect(rematchCount).toBe(1);
     expect(receipt(waiting).store).toBeNull();
 
-    expect(service.rematch()).toBe(1);
+    expect(service.rematch()).toEqual({ matched: 1, items: 0 });
     expect(receipt(waiting)).toMatchObject({ store: { name: "Walmart" }, storeMatchedBy: "identifier" });
     expect(receipt(unrelated).store).toBeNull();
-    expect(service.rematch()).toBe(0);
+    expect(service.rematch()).toEqual({ matched: 0, items: 0 });
   });
 });
 

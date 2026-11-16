@@ -1,7 +1,11 @@
 import type {
   IdentifierAnswer,
   IdentifierQuestion,
+  ItemNameSource,
+  ItemRef,
   LearningNotice,
+  LineItemSuggestion,
+  LineUnit,
   ReceiptStatus,
   StoreEvidence,
   StoreIssue,
@@ -49,12 +53,16 @@ export interface ReceiptRepository {
   findImage(imageId: Id): ReceiptImage | undefined;
   /** Changes the status only if it is now one of `from`. Returns whether it changed. */
   setStatus(id: Id, status: ReceiptStatus, from: readonly ReceiptStatus[]): boolean;
-  /** Replaces the extracted data and line items, and sets the status and the store it identified. */
+  /**
+   * Replaces the extracted data and line items, and sets the status, the store it identified and
+   * each line's matched item (`itemIds`, in line order).
+   */
   saveExtraction(
     id: Id,
     result: ExtractionResult,
     status: ReceiptStatus,
     store: ReceiptStore | undefined,
+    itemIds: readonly (Id | null)[],
   ): void;
   /**
    * Saves a review and marks the receipt confirmed. Lines with an id the receipt has are updated
@@ -68,14 +76,41 @@ export interface ReceiptRepository {
   listUnidentified(): { id: Id; evidence: StoreEvidence }[];
   /** Sets the store of a receipt that still has none and isn't confirmed. Returns whether it changed. */
   setIdentifiedStore(id: Id, store: ReceiptStore): boolean;
+  /** Read receipts' lines with no item, grouped by receipt with its store: what item re-matching could fix. */
+  listLinesWithoutItem(): {
+    receiptId: Id;
+    storeId: Id | null;
+    lines: { id: Id; kind: "item" | "fee"; rawName: string | null; itemCode: string | null }[];
+  }[];
+  /** Sets a line's item if it still has none. Returns whether it changed. */
+  setLineItem(lineId: Id, itemId: Id): boolean;
+  /** An item's latest purchases, newest first. */
+  itemPurchases(itemId: Id, limit: number): ItemPurchase[];
+}
+
+export interface ItemPurchase {
+  receiptId: Id;
+  purchasedAt: string | null;
+  capturedAt: string;
+  storeId: Id | null;
+  lineTotalCents: number | null;
+  quantityMilli: number;
+  unit: LineUnit;
+}
+
+/** A line as the item rules read it. */
+export interface LineForItems {
+  kind: "item" | "fee";
+  rawName: string | null;
+  itemCode: string | null;
 }
 
 /**
- * What `receipts` needs from `catalog` (SPEC.md §4.3): identifying stores, suggesting them,
- * creating them, and learning from confirmed receipts. Synchronous, so it can share a
+ * What `receipts` needs from `catalog` (SPEC.md §4.3): identifying stores and items, suggesting
+ * them, creating them, and learning from confirmed receipts. Synchronous, so it can share a
  * transaction with the receipt's own changes. Supplied by `catalog`, wired in the composition root.
  */
-export interface StoreCatalog {
+export interface Catalog {
   identifyStore(evidence: StoreEvidence): { storeId: Id; match: StoreMatch } | undefined;
   reviewStore(evidence: StoreEvidence): { issue: StoreIssue; suggestions: StoreSuggestion[] };
   learnFromConfirmedReceipt(input: {
@@ -83,8 +118,20 @@ export interface StoreCatalog {
     storeId: Id;
     evidence: StoreEvidence;
     previous: { storeId: Id | null; matchedBy: StoreMatchedBy | null; alreadyCounted: boolean };
+    /** Lines with an item; `alreadyCounted` when the receipt was confirmed before with that item. */
+    lines: readonly (LineForItems & { itemId: Id; alreadyCounted: boolean })[];
     answers: readonly IdentifierAnswer[];
   }): Result<{ notices: LearningNotice[] }, { kind: "needs-answers"; questions: IdentifierQuestion[] }>;
+  /** The item each line matches by a known identifier, in order. */
+  identifyLines(storeId: Id | null, lines: readonly LineForItems[]): (ItemRef | undefined)[];
+  /** What to offer each line with no item; never applied on its own. */
+  suggestLines(
+    storeId: Id | null,
+    lines: readonly (LineForItems & { suggestedName: string | null })[],
+  ): (LineItemSuggestion | null)[];
+  createItem(name: string, nameSource: ItemNameSource): ItemRef;
+  findItem(id: Id): ItemRef | undefined;
+  itemRefs(ids: readonly Id[]): Map<Id, ItemRef>;
   createStore(name: string): Result<StoreRef, { kind: "name-taken" }>;
   findStore(id: Id): StoreRef | undefined;
   storeRefs(ids: readonly Id[]): Map<Id, StoreRef>;

@@ -140,7 +140,7 @@
   align-items: flex-start;
   gap: 8px;
 }
-.lineRow > .field:first-child {
+.lineRow > .nameCell {
   flex: 1 1 auto;
 }
 .lineAmount {
@@ -318,4 +318,131 @@
   .chevron {
     transition: none;
   }
+}
+
+/* A line's item above its printed text (docs/DESIGN.md, "Receipts screens"). */
+.nameCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.itemName {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-heading);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.itemName:disabled {
+  cursor: default;
+}
+
+.itemNew {
+  flex: none;
+  padding: 0 8px;
+  border: 1px solid var(--accent-tint-border);
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.itemOffer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.itemOffer strong {
+  color: var(--text-body);
+  font-weight: 600;
+}
+
+.useIt {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--accent-tint-border);
+  border-radius: var(--radius-pill);
+  background: var(--accent-tint);
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.useIt:disabled {
+  display: none;
+}
+
+.itemSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.renameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.grow {
+  flex: 1 1 220px;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-heading);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.choice:hover {
+  border-color: var(--border-hover);
+}
+
+.itemActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }

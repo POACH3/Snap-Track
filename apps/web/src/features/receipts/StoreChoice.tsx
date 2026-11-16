@@ -7,8 +7,10 @@ import styles from "./StoreChoice.module.css";
 /** The store a person picked: one already known, or a new one to create when the receipt is confirmed. */
 export type ChosenStore = { kind: "existing"; store: StoreRef } | { kind: "new"; name: string } | null;
 
-const TYPE_LABEL: Record<IdentifierRef["type"], string> = {
+const TYPE_LABEL: Record<IdentifierRef["type"] | "barcode" | "code", string> = {
   name: "printed name",
+  barcode: "barcode",
+  code: "item code",
   legal_name: "legal name",
   logo_text: "logo",
   phone: "phone number",
@@ -16,7 +18,7 @@ const TYPE_LABEL: Record<IdentifierRef["type"], string> = {
   address: "address",
 };
 
-export const identifierText = (identifier: IdentifierRef) =>
+export const identifierText = (identifier: { type: keyof typeof TYPE_LABEL; displayValue: string }) =>
   `${TYPE_LABEL[identifier.type]} ${identifier.displayValue}`;
 
 function reason(suggestion: StoreSuggestion): string {

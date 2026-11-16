@@ -63,7 +63,7 @@ export function StoreScreen() {
   return (
     <div className={styles.screen}>
       {back}
-      <Rename key={query.data.store.name} detail={query.data} />
+      <Rename detail={query.data} />
       <Identifiers detail={query.data} />
       <AddIdentifier storeId={query.data.store.id} storeName={query.data.store.name} />
     </div>

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   IdentifierAnswer,
+  ItemName,
+  ItemRef,
   LearningNotice,
   NEEDS_ANSWERS_ERROR,
   StoreIssue,
@@ -57,9 +59,27 @@ const shortText = (max: number) => z.string().trim().max(max);
 const optionalText = (max: number) => shortText(max).nullable();
 
 /** A line as the review form edits it. Its position is its place in the list. */
+/** A line's item: one already known, or a new one created with the confirm (SPEC.md §6.7). */
+export const LineItemChoice = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("existing"), itemId: z.uuid() }),
+  z.object({ kind: z.literal("new"), name: ItemName }),
+]);
+export type LineItemChoice = z.infer<typeof LineItemChoice>;
+
+/** What the review screen offers for a line with no item. Never applied until tapped. */
+export const LineItemSuggestion = z.discriminatedUnion("kind", [
+  /** `identifier`: its code or printed name is saved for this item; `similar`: the names are alike. */
+  z.object({ kind: z.literal("existing"), item: ItemRef, reason: z.enum(["identifier", "similar"]) }),
+  /** The model's readable name, as a new item. */
+  z.object({ kind: z.literal("new"), name: z.string() }),
+]);
+export type LineItemSuggestion = z.infer<typeof LineItemSuggestion>;
+
 export const DraftLine = z.object({
   /** Present for a line the receipt already has, so what is attached to it is kept. */
   id: z.uuid().optional(),
+  /** Null: no item, unless its identifiers match one at confirm. */
+  item: LineItemChoice.nullable().default(null),
   kind: z.enum(["item", "fee"]),
   rawName: optionalText(300),
   itemCode: optionalText(100),
@@ -170,7 +190,16 @@ export const ReceiptDetail = ReceiptSummary.extend({
   /** Worked out now, with the identifiers known now (SPEC.md §6.4). Empty once the store is set. */
   storeSuggestions: z.array(StoreSuggestion),
   draft: ReceiptDraft.extend({
-    lines: z.array(DraftLine.extend({ id: z.uuid(), suggestedItemName: z.string().nullable() })),
+    lines: z.array(
+      DraftLine.extend({
+        id: z.uuid(),
+        suggestedItemName: z.string().nullable(),
+        /** The line's item now, with its name, for showing it. */
+        itemRef: ItemRef.nullable(),
+        /** For a line with no item: what to offer. */
+        itemSuggestion: LineItemSuggestion.nullable(),
+      }),
+    ),
   }),
   /** Word-for-word transcription. */
   rawText: z.string().nullable(),
@@ -201,6 +230,8 @@ export const ConfirmReceiptInput = z.object({
   answers: z.array(IdentifierAnswer).max(50).default([]),
 });
 export type ConfirmReceiptInput = z.input<typeof ConfirmReceiptInput>;
+/** A confirm as the server receives it, after validation and defaults. */
+export type ConfirmReceiptRequest = z.output<typeof ConfirmReceiptInput>;
 
 export const PutReceiptInput = z.object({
   /** Made on the phone at capture time, so a retried upload is the same receipt (SPEC.md §5). */
@@ -265,6 +296,8 @@ export const receiptsContract = {
         notices: z.array(LearningNotice),
         /** Other receipts with no store that would now be matched; offered, never applied (§6.4). */
         rematchCount: z.number().int().min(0),
+        /** Earlier lines with no item that would now match an item; offered with `rematchCount`. */
+        itemRematchCount: z.number().int().min(0),
       }),
     )
     .errors({
@@ -279,7 +312,26 @@ export const receiptsContract = {
     .route({ method: "GET" })
     .output(z.object({ unreviewed: z.number().int().min(0), reviewRequired: z.number().int().min(0) })),
   /** Match every unconfirmed receipt with no store whose identifiers are now known. Only after the user agrees. */
-  rematch: procedure.output(z.object({ matched: z.number().int().min(0) })),
+  rematch: procedure.output(z.object({ matched: z.number().int().min(0), items: z.number().int().min(0) })),
+  /** An item's latest purchases, newest first, for its Library page. */
+  itemPurchases: procedure
+    .route({ method: "GET" })
+    .input(z.object({ itemId: z.uuid(), limit: z.number().int().min(1).max(50).default(10) }))
+    .output(
+      z.object({
+        purchases: z.array(
+          z.object({
+            receiptId: z.uuid(),
+            purchasedAt: z.string().nullable(),
+            capturedAt: z.iso.datetime(),
+            store: StoreRef.nullable(),
+            lineTotalCents: z.number().int().nullable(),
+            quantityMilli: z.number().int(),
+            unit: LineUnit,
+          }),
+        ),
+      }),
+    ),
 };
 
 /** Where the server serves a receipt image and its thumbnail (plain GET, so `<img>` can load them). */

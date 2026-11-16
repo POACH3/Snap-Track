@@ -54,6 +54,10 @@ export function createReceiptsRouter(service: ReceiptsService) {
 
     counts: os.receipts.counts.handler(() => service.countWaiting()),
 
-    rematch: os.receipts.rematch.handler(() => ({ matched: service.rematch() })),
+    rematch: os.receipts.rematch.handler(() => service.rematch()),
+
+    itemPurchases: os.receipts.itemPurchases.handler(({ input }) => ({
+      purchases: service.itemPurchases(input.itemId, input.limit),
+    })),
   };
 }

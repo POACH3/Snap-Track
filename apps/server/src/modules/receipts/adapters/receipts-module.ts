@@ -1,13 +1,7 @@
 import type { Clock, Transaction } from "@snaptrack/core";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { createReceiptsService } from "../application/receipts-service.ts";
-import type {
-  FileStore,
-  ImageConverter,
-  ReceiptUploadedListener,
-  StoreCatalog,
-  UserDirectory,
-} from "../ports.ts";
+import type { FileStore, ImageConverter, ReceiptUploadedListener, Catalog, UserDirectory } from "../ports.ts";
 import { registerImageRoutes } from "./image-routes.ts";
 import { createReceiptsRouter } from "./rpc.ts";
 import { SqliteReceiptRepository } from "./sqlite-receipt-repository.ts";
@@ -19,7 +13,7 @@ export interface ReceiptsModuleOptions {
   files: FileStore;
   converter: ImageConverter;
   users: UserDirectory;
-  catalog: StoreCatalog;
+  catalog: Catalog;
   onUploaded?: ReceiptUploadedListener;
 }
 

@@ -66,6 +66,10 @@ test.describe("desktop", { tag: "@desktop" }, () => {
       "aria-pressed",
       "true",
     );
+    // A line with no item offers the model's readable name; Use it names the item on confirm.
+    await expect(page.getByText("Name it:").first()).toBeVisible();
+    await page.getByRole("button", { name: "Use Whole milk, 1 gal for this line" }).click();
+    await expect(page.getByRole("button", { name: /Whole milk, 1 gal/ })).toBeVisible();
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(toast(page, "Receipt confirmed.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Receipts", exact: true })).toBeVisible();
@@ -75,7 +79,8 @@ test.describe("desktop", { tag: "@desktop" }, () => {
     await row.click();
     await expect(row).toHaveAttribute("aria-expanded", "true");
     const items = page.getByRole("list", { name: "Items" });
-    await expect(items.getByText("WHOLE MILK GAL")).toBeVisible();
+    await expect(items.getByText("Whole milk, 1 gal")).toBeVisible();
+    await expect(items.getByText("SOURDOUGH LOAF")).toBeVisible();
     await expect(page.getByText("Visa credit ···· 4821")).toBeVisible();
     await page.getByRole("link", { name: "View receipt image" }).click();
 
@@ -90,6 +95,8 @@ test.describe("desktop", { tag: "@desktop" }, () => {
     await openWhenRead(page, second);
     await expect(page.getByRole("heading", { name: "Fresh Mart" })).toBeVisible();
     await expect(page.getByText(/Matched by website freshmart\.example/)).toBeVisible();
+    // Its milk is printed differently but has the same code, so it shows the item's name.
+    await expect(page.getByRole("button", { name: "Whole milk, 1 gal" })).toBeVisible();
 
     // Library › Stores shows what it is recognized by.
     await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Library" }).click();
@@ -98,6 +105,18 @@ test.describe("desktop", { tag: "@desktop" }, () => {
     const identifiers = page.getByRole("list", { name: "Identifiers" });
     await expect(identifiers.getByText("(555) 010-2000")).toBeVisible();
     await expect(identifiers.getByText("freshmart.example")).toBeVisible();
+
+    // Library › Items: renaming shows on every purchase at once.
+    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Library" }).click();
+    await page.getByRole("link", { name: /Items/ }).click();
+    await page.getByRole("link", { name: /Whole milk, 1 gal/ }).click();
+    await expect(page.getByRole("list", { name: "Identifiers" }).getByText("4417")).toBeVisible();
+    await expect(page.getByRole("list", { name: "Purchases" }).getByRole("listitem")).toHaveCount(2);
+    await page.getByLabel("Name", { exact: true }).fill("Milk");
+    await page.getByRole("button", { name: "Rename" }).click();
+    await expect(toast(page, "Item renamed.")).toBeVisible();
+    await page.goto(`/receipts/${second}`);
+    await expect(page.getByRole("button", { name: "Milk", exact: true })).toBeVisible();
   });
 
   test("a review-required receipt is typed in by hand; the total is required, and leaving asks first", async ({

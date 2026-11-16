@@ -61,6 +61,7 @@ function learn(
     storeId,
     evidence: receipt,
     previous: fresh,
+    lines: [],
     answers,
   });
 }

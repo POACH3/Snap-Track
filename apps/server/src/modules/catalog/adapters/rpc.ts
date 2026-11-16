@@ -3,6 +3,36 @@ import type { CatalogService } from "../application/catalog-service.ts";
 
 export function createCatalogRouter(service: CatalogService) {
   return {
+    items: {
+      search: os.catalog.items.search.handler(({ input }) => ({ items: service.searchItems(input.query) })),
+
+      get: os.catalog.items.get.handler(({ input, errors }) => {
+        const detail = service.itemDetail(input.id);
+        if (detail === undefined) throw errors.ITEM_NOT_FOUND();
+        return detail;
+      }),
+
+      rename: os.catalog.items.rename.handler(({ input, errors }) => {
+        const result = service.renameItem(input.id, input.name);
+        if (!result.ok) throw errors.ITEM_NOT_FOUND();
+        return { item: result.value };
+      }),
+    },
+
+    itemIdentifiers: {
+      remove: os.catalog.itemIdentifiers.remove.handler(({ input, errors }) => {
+        const result = service.removeItemIdentifier(input.id);
+        if (!result.ok) throw errors.IDENTIFIER_NOT_FOUND();
+        return result.value;
+      }),
+
+      setState: os.catalog.itemIdentifiers.setState.handler(({ input, errors }) => {
+        const result = service.setItemIdentifierState(input.id, input.state);
+        if (!result.ok) throw errors.IDENTIFIER_NOT_FOUND();
+        return result.value;
+      }),
+    },
+
     stores: {
       search: os.catalog.stores.search.handler(({ input }) => ({
         stores: service.searchStores(input.query),

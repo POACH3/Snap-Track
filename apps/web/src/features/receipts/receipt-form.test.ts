@@ -60,6 +60,9 @@ const draft: ReceiptDetail["draft"] = {
       discountCents: null,
       taxCode: "F",
       suggestedItemName: "Bananas",
+      item: null,
+      itemRef: null,
+      itemSuggestion: { kind: "new", name: "Bananas" },
     },
   ],
 };
@@ -103,6 +106,7 @@ describe("the form and the draft", () => {
         // The form doesn't send the model's suggested name; the server keeps it.
         lines: draft.lines.map((line) => ({
           id: line.id,
+          item: null,
           kind: line.kind,
           rawName: line.rawName,
           itemCode: line.itemCode,

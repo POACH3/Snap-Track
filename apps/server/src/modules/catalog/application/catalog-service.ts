@@ -22,11 +22,20 @@ import {
 } from "../domain/identifiers.ts";
 import { planStoreLearning, type LearningChange, type LearningPlan } from "../domain/learning.ts";
 import { rankSuggestions } from "../domain/suggestions.ts";
-import type { StoreIdentifierRepository, StoreIdentifierRow, StoreRepository } from "../ports.ts";
+import type {
+  ItemIdentifierRepository,
+  ItemRepository,
+  StoreIdentifierRepository,
+  StoreIdentifierRow,
+  StoreRepository,
+} from "../ports.ts";
+import { createItemCatalog, type ConfirmedLine } from "./item-catalog.ts";
 
 export interface CatalogDeps {
   stores: StoreRepository;
   identifiers: StoreIdentifierRepository;
+  items: ItemRepository;
+  itemIdentifiers: ItemIdentifierRepository;
   transaction: Transaction;
 }
 
@@ -41,6 +50,7 @@ export type IdentifierNotFound = { kind: "identifier-not-found" };
 export type CatalogService = ReturnType<typeof createCatalogService>;
 
 export function createCatalogService(deps: CatalogDeps) {
+  const itemCatalog = createItemCatalog(deps);
   const savedFor = (identifiers: readonly ReceiptIdentifier[]) =>
     deps.identifiers.findByValues(identifiers.map((identifier) => identifier.value));
 
@@ -71,11 +81,24 @@ export function createCatalogService(deps: CatalogDeps) {
   }
 
   /** The plan's questions, with the stores' names. */
-  function questionsOf(plan: Extract<LearningPlan, { kind: "questions" }>): IdentifierQuestion[] {
+  function questionsOf(
+    plan: Extract<LearningPlan, { kind: "questions" }>,
+    movingTo: string,
+  ): IdentifierQuestion[] {
     const names = refs(plan.questions.map((question) => question.savedForStoreId));
     return plan.questions.flatMap((question) => {
       const savedFor = names.get(question.savedForStoreId);
-      return savedFor === undefined ? [] : [{ key: question.key, identifier: question.identifier, savedFor }];
+      return savedFor === undefined
+        ? []
+        : [
+            {
+              key: question.key,
+              about: "store" as const,
+              identifier: question.identifier,
+              savedFor,
+              movingTo,
+            },
+          ];
     });
   }
 
@@ -102,6 +125,8 @@ export function createCatalogService(deps: CatalogDeps) {
     new Map(answers.map((answer) => [answer.key, answer.move]));
 
   return {
+    ...itemCatalog,
+
     /** The store a receipt's evidence identifies, or undefined if it needs a person (SPEC.md §6.4). */
     identifyStore(evidence: StoreEvidence): { storeId: Id; match: StoreMatch } | undefined {
       const result = identify(evidence);
@@ -135,6 +160,8 @@ export function createCatalogService(deps: CatalogDeps) {
       storeId: Id;
       evidence: StoreEvidence;
       previous: { storeId: Id | null; matchedBy: StoreMatchedBy | null; alreadyCounted: boolean };
+      /** The receipt's lines that have an item; lines without one teach nothing. */
+      lines: readonly ConfirmedLine[];
       answers: readonly IdentifierAnswer[];
     }): Result<{ notices: LearningNotice[] }, NeedsAnswers> {
       const identifiers = identifiersFromEvidence(input.evidence);
@@ -145,8 +172,20 @@ export function createCatalogService(deps: CatalogDeps) {
         previous: input.previous,
         answers: answerMap(input.answers),
       });
-      if (plan.kind === "questions") return err({ kind: "needs-answers", questions: questionsOf(plan) });
+      const items = itemCatalog.planItems(input.storeId, input.lines, input.answers);
+      // Store and item questions are asked together; nothing is learned until all are answered.
+      if (plan.kind === "questions" || items.kind === "questions") {
+        const storeName = deps.stores.findById(input.storeId)?.name ?? "";
+        return err({
+          kind: "needs-answers",
+          questions: [
+            ...(plan.kind === "questions" ? questionsOf(plan, storeName) : []),
+            ...(items.kind === "questions" ? itemCatalog.itemQuestions(items) : []),
+          ],
+        });
+      }
       apply(plan.changes, input.storeId, input.receiptId);
+      itemCatalog.applyItems(items.changes, input.receiptId);
       const names = refs(plan.notices.map((notice) => notice.alsoSavedForStoreId));
       return ok({
         notices: plan.notices.flatMap((notice) => {
@@ -228,8 +267,10 @@ export function createCatalogService(deps: CatalogDeps) {
           previous: { storeId: null, matchedBy: null, alreadyCounted: false },
           answers: answerMap(input.answers),
         });
-        if (plan.kind === "questions")
-          return err({ kind: "needs-answers" as const, questions: questionsOf(plan) });
+        if (plan.kind === "questions") {
+          const storeName = deps.stores.findById(input.storeId)?.name ?? "";
+          return err({ kind: "needs-answers" as const, questions: questionsOf(plan, storeName) });
+        }
         apply(plan.changes, input.storeId, null);
         // An address another store has can't be saved for this one too; it became shared instead.
         const [notice] = plan.notices;

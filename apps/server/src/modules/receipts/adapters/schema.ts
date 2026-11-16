@@ -103,11 +103,14 @@ export const lineItems = sqliteTable(
     taxCode: text("tax_code"),
     /** The model's guess at a readable name; never applied on its own. */
     suggestedItemName: text("suggested_item_name"),
+    /** An `items` id; null until matched or chosen. No foreign key: that table belongs to `catalog`. */
+    itemId: text("item_id"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
     uniqueIndex("line_items_receipt_position_unique").on(table.receiptId, table.position),
+    index("line_items_item_idx").on(table.itemId),
     check("line_items_kind_check", sql`${table.kind} in ('item', 'fee')`),
   ],
 );
