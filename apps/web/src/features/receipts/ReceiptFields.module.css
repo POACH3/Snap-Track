@@ -171,6 +171,10 @@
   flex-direction: column;
   gap: 4px;
 }
+/* Room between one line and the next; a line's own name or suggestion stays close to it. */
+.lineBlock + .lineBlock {
+  margin-top: 12px;
+}
 .lineAmount {
   flex: none;
   width: 84px;
