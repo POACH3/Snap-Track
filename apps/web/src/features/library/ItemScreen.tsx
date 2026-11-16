@@ -13,6 +13,7 @@ import { TextField } from "../../shared/ui/TextField.tsx";
 import { useToast } from "../../shared/ui/toast-context.ts";
 import { purchaseText } from "../receipts/receipt-format.ts";
 import { ItemLabelsCard } from "./LabelCards.tsx";
+import { MergeItemCard } from "./MergeCards.tsx";
 import styles from "./Library.module.css";
 import {
   useItem,
@@ -68,6 +69,7 @@ export function ItemScreen() {
       />
       <Identifiers detail={query.data} />
       <Purchases itemId={query.data.item.id} />
+      <MergeItemCard itemId={query.data.item.id} itemName={query.data.item.name} />
     </div>
   );
 }

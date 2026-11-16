@@ -43,3 +43,17 @@ export function useSetItemIdentifierState() {
   const invalidate = useInvalidate();
   return useMutation(api.catalog.itemIdentifiers.setState.mutationOptions({ onSuccess: invalidate }));
 }
+
+/** Merges one item into another (SPEC.md §4.3); its purchases move too. */
+export function useMergeItem() {
+  const invalidate = useInvalidate();
+  // Not awaited: the page of the merged-away one is left for the kept one's before the refresh
+  // finds it gone.
+  return useMutation(
+    api.catalog.items.merge.mutationOptions({
+      onSuccess: () => {
+        void invalidate();
+      },
+    }),
+  );
+}

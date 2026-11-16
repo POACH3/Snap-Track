@@ -142,3 +142,36 @@ export interface ItemIdentifierRepository {
   setState(id: Id, state: IdentifierState): void;
   remove(id: Id): void;
 }
+
+/** The catalog's own rows in a merge (SPEC.md §4.3, Merges). Synchronous, inside the merge's transaction. */
+export interface MergeRepository {
+  moveStoreIdentifiers(from: Id, to: Id): void;
+  /** Item codes and printed names saved for `from`; where `to` has the same one, its row stays. */
+  moveItemIdentifiersToStore(from: Id, to: Id): void;
+  moveItemIdentifiersToItem(from: Id, to: Id): void;
+  /** `from`'s tags join `to`'s, without repeats. */
+  moveItemTags(from: Id, to: Id): void;
+  /** Items tagged `from` are tagged `to` instead, without repeats. */
+  moveTagOnItems(from: Id, to: Id): void;
+  /** Items' categories and stores' defaults that were `from` become `to`. */
+  pointCategoryAt(from: Id, to: Id): void;
+  /** `to` keeps its own; `from`'s fills a gap only. */
+  fillStoreDefault(from: Id, to: Id): void;
+  fillItemCategory(from: Id, to: Id): void;
+  reparent(childIds: readonly Id[], parentId: Id): void;
+  deleteStore(id: Id): void;
+  deleteItem(id: Id): void;
+  deleteCategory(id: Id): void;
+  deleteTag(id: Id): void;
+}
+
+/**
+ * Told about each merge inside its transaction, so `receipts` moves its own rows (SPEC.md §4.3):
+ * `catalog` can't call `receipts`, which depends on it. Wired in the composition root.
+ */
+export interface CatalogMergeListener {
+  storesMerged(from: Id, to: Id): void;
+  itemsMerged(from: Id, to: Id): void;
+  categoriesMerged(from: Id, to: Id): void;
+  tagsMerged(from: Id, to: Id): void;
+}

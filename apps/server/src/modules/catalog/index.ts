@@ -4,7 +4,7 @@
 export { createCatalogModule, type CatalogModuleOptions } from "./adapters/catalog-module.ts";
 export type { CatalogService } from "./application/catalog-service.ts";
 export type { LabelChoices } from "./application/label-catalog.ts";
-export type { PurchaseLabelUsage } from "./ports.ts";
+export type { CatalogMergeListener, PurchaseLabelUsage } from "./ports.ts";
 // The precedence rule for a line's category (SPEC.md §5, "One rule, two forms"). It lives in
 // `@snaptrack/core` so the receipt page can apply it while a person edits; this is its server name.
 export { effectiveCategory, lineTags, pendingSuggestion } from "@snaptrack/core";

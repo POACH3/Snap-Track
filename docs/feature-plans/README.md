@@ -14,6 +14,7 @@ Files here are plans for implementing features, one per feature. A plan that cha
 | [store-review-plan.md](store-review-plan.md) | §2, §4.2, §5, §6.4, §6.5, §6.7, §11, §12 | shipped (2026-11-15) |
 | [items-plan.md](items-plan.md) | §5, §6.4, §6.5, §6.7, §11 | shipped (2026-11-15, merged) |
 | [categories-and-tags-plan.md](categories-and-tags-plan.md) | §5, §6.3, §6.5, §11 | shipped (2026-11-16, merged; real-receipt check pending) |
-| [manual-entry-plan.md](manual-entry-plan.md) | §5, §6.5, §6.6, §11 | active (built 2026-11-16, branch `stage-4-manual-entry`) |
+| [manual-entry-plan.md](manual-entry-plan.md) | §5, §6.5, §6.6, §11 | shipped (2026-11-16, merged) |
+| [catalog-merges-plan.md](catalog-merges-plan.md) | §4.3, §5, §11 | active (built 2026-11-16, branch `stage-4-merges`) |
 
 To add a plan: name it `<feature>-plan.md`, add the `Changes SPEC.md` and `Status` lines under its title, and add a row here.

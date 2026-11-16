@@ -1,5 +1,6 @@
 // Use-case tests for review, confirm and store matching (SPEC.md §6.4, §6.5, §6.7): real SQLite in
 // memory with the real catalog module, fakes for files, images and clock.
+import { SqliteCatalogMergeListener } from "../adapters/sqlite-catalog-merge-listener.ts";
 import { SqlitePurchaseLabelUsage } from "../adapters/sqlite-purchase-label-usage.ts";
 import { ExtractedReceipt, type ReceiptDetail, type StoreChoice } from "@snaptrack/contracts";
 import { newId } from "@snaptrack/core";
@@ -27,7 +28,13 @@ beforeEach(() => {
   const db = toDrizzle(sqlite);
   clock = new FakeClock(new Date("2026-11-15T12:00:00.000Z"));
   const transaction = new SqliteTransaction(sqlite);
-  catalog = createCatalogModule({ db, clock, transaction, usage: new SqlitePurchaseLabelUsage(db) }).service;
+  catalog = createCatalogModule({
+    db,
+    clock,
+    transaction,
+    usage: new SqlitePurchaseLabelUsage(db),
+    mergeListener: new SqliteCatalogMergeListener(db),
+  }).service;
   service = createReceiptsService({
     receipts: new SqliteReceiptRepository(db, clock),
     files: new InMemoryFileStore(),

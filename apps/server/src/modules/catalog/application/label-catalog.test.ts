@@ -5,7 +5,7 @@ import { toDrizzle } from "../../../platform/db/connection.ts";
 import { SqliteTransaction } from "../../../platform/db/sqlite-transaction.ts";
 import { createTestDatabase } from "../../../platform/db/testing/test-database.ts";
 import { createCatalogModule } from "../adapters/catalog-module.ts";
-import { unusedLabels } from "../testing/unused-labels.ts";
+import { noReceipts, unusedLabels } from "../testing/unused-labels.ts";
 import type { CatalogService } from "./catalog-service.ts";
 
 let catalog: CatalogService;
@@ -17,6 +17,7 @@ beforeEach(() => {
     clock: new FakeClock(new Date("2026-11-15T12:00:00.000Z")),
     transaction: new SqliteTransaction(sqlite),
     usage: unusedLabels,
+    mergeListener: noReceipts,
   }).service;
 });
 

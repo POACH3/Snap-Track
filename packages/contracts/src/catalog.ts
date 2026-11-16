@@ -152,6 +152,8 @@ const STORE_NOT_FOUND = { status: 404, message: "No such store." } as const;
 const ITEM_NOT_FOUND = { status: 404, message: "No such item." } as const;
 const ITEM_IDENTIFIER_NOT_FOUND = { status: 404, message: "No such identifier." } as const;
 const MAX_TAGS = 50;
+const MERGE_INPUT = z.object({ id: z.uuid(), intoId: z.uuid() });
+const SAME = { status: 400, message: "Choose a different one to merge into." } as const;
 
 export const catalogContract = {
   items: {
@@ -180,6 +182,11 @@ export const catalogContract = {
       .input(z.object({ id: z.uuid(), tagIds: z.array(z.uuid()).max(MAX_TAGS) }))
       .output(ItemDetail)
       .errors({ ITEM_NOT_FOUND }),
+    /**
+     * Merges `id` into `intoId` (SPEC.md §4.3): its identifiers, tags and purchases move to the kept
+     * item, whose own name and category stay (its category fills a gap only). `id` is then gone.
+     */
+    merge: procedure.input(MERGE_INPUT).output(ItemDetail).errors({ ITEM_NOT_FOUND, SAME }),
     /** Several items' categories and tags at once, for the receipt page. Unknown items are left out. */
     labels: procedure
       .route({ method: "GET" })
@@ -223,6 +230,11 @@ export const catalogContract = {
         STORE_NOT_FOUND,
         STORE_NAME_TAKEN: { status: 409, message: "Another store already has that name." },
       }),
+    /**
+     * Merges `id` into `intoId` (SPEC.md §4.3): its identifiers and receipts move to the kept store,
+     * whose own name and default stay (its default fills a gap only). `id` is then gone.
+     */
+    merge: procedure.input(MERGE_INPUT).output(StoreDetail).errors({ STORE_NOT_FOUND, SAME }),
     /** "What do you usually buy here?" Saves at once; null clears it. */
     setDefaultCategory: procedure
       .input(z.object({ id: z.uuid(), categoryId: z.uuid().nullable() }))

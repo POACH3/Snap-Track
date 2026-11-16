@@ -1,0 +1,43 @@
+/* The merge picker: choices like the item picker's (docs/DESIGN.md, "Merge"). */
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-heading);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.option:hover {
+  border-color: var(--border-hover);
+}
+
+.detail {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.empty {
+  padding: 8px 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}

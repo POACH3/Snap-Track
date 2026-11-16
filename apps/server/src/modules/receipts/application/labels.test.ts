@@ -1,6 +1,7 @@
 // Use-case tests for categories and tags on purchases (SPEC.md §5 Classification rules, §6.5,
 // §6.7; docs/feature-plans/categories-and-tags-plan.md): real SQLite in memory with the real
 // catalog module, fakes for files, images and clock.
+import { SqliteCatalogMergeListener } from "../adapters/sqlite-catalog-merge-listener.ts";
 import { ExtractedReceipt, type ReceiptDetail, type StoreChoice } from "@snaptrack/contracts";
 import { newId } from "@snaptrack/core";
 import { FakeClock } from "@snaptrack/core/testing";
@@ -28,7 +29,13 @@ beforeEach(() => {
   const db = toDrizzle(sqlite);
   clock = new FakeClock(new Date("2026-11-15T12:00:00.000Z"));
   const transaction = new SqliteTransaction(sqlite);
-  catalog = createCatalogModule({ db, clock, transaction, usage: new SqlitePurchaseLabelUsage(db) }).service;
+  catalog = createCatalogModule({
+    db,
+    clock,
+    transaction,
+    usage: new SqlitePurchaseLabelUsage(db),
+    mergeListener: new SqliteCatalogMergeListener(db),
+  }).service;
   service = createReceiptsService({
     receipts: new SqliteReceiptRepository(db, clock),
     files: new InMemoryFileStore(),

@@ -10,6 +10,7 @@ import { ScriptedExtractor } from "../modules/extraction/testing/scripted-extrac
 import { healthRouter } from "../modules/health/index.ts";
 import {
   createReceiptsModule,
+  SqliteCatalogMergeListener,
   SqlitePurchaseLabelUsage,
   type FileStore,
   type ImageConverter,
@@ -52,7 +53,13 @@ export function createTestApp(options: TestAppOptions = {}) {
     secureCookies: options.secureCookies ?? false,
     hasher: new FakePasswordHasher(),
   });
-  const catalog = createCatalogModule({ db, clock, transaction, usage: new SqlitePurchaseLabelUsage(db) });
+  const catalog = createCatalogModule({
+    db,
+    clock,
+    transaction,
+    usage: new SqlitePurchaseLabelUsage(db),
+    mergeListener: new SqliteCatalogMergeListener(db),
+  });
   const files = options.files ?? new InMemoryFileStore();
   const receipts = createReceiptsModule({
     db,

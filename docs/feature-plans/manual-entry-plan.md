@@ -1,7 +1,7 @@
 # Stage 4, part 4: manual entry and duplicate warnings
 
 **Changes SPEC.md:** §5 Data Model (`duplicate_dismissals`, deleting a receipt), §6.5 Review (duplicate warning, Delete receipt), §6.6 Manual entry (where it starts, its endpoint), §11 Stage 4.  
-**Status:** active (built 2026-11-16 on branch `stage-4-manual-entry`; mock approved).
+**Status:** shipped (2026-11-16, merged).
 
 Part 4 of the five Stage 4 plans (parts 1–3 shipped). Adds **Add expense** for purchases with no
 paper receipt (quick and full entry, one form with review), and duplicate warnings on every

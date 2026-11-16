@@ -48,3 +48,17 @@ export function useSetIdentifierState() {
   const invalidate = useInvalidate();
   return useMutation(api.catalog.identifiers.setState.mutationOptions({ onSuccess: invalidate }));
 }
+
+/** Merges one store into another (SPEC.md §4.3); receipts move too. */
+export function useMergeStore() {
+  const invalidate = useInvalidate();
+  // Not awaited: the page of the merged-away one is left for the kept one's before the refresh
+  // finds it gone.
+  return useMutation(
+    api.catalog.stores.merge.mutationOptions({
+      onSuccess: () => {
+        void invalidate();
+      },
+    }),
+  );
+}

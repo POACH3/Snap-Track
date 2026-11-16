@@ -1,4 +1,4 @@
-import { unusedLabels } from "../testing/unused-labels.ts";
+import { noReceipts, unusedLabels } from "../testing/unused-labels.ts";
 import type { StoreEvidence } from "@snaptrack/contracts";
 import { FakeClock } from "@snaptrack/core/testing";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -43,6 +43,7 @@ beforeEach(() => {
     clock: new FakeClock(new Date("2026-11-15T12:00:00.000Z")),
     transaction: new SqliteTransaction(sqlite),
     usage: unusedLabels,
+    mergeListener: noReceipts,
   }).service;
 });
 

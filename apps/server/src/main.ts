@@ -15,6 +15,7 @@ import {
   createReceiptsModule,
   FileSystemFileStore,
   SipsImageConverter,
+  SqliteCatalogMergeListener,
   SqlitePurchaseLabelUsage,
 } from "./modules/receipts/index.ts";
 
@@ -68,6 +69,7 @@ const catalog = createCatalogModule({
   clock: systemClock,
   transaction,
   usage: new SqlitePurchaseLabelUsage(db),
+  mergeListener: new SqliteCatalogMergeListener(db),
 });
 
 // The service writes only under its data folder (SPEC.md §4.7), which holds IMAGE_DIR.

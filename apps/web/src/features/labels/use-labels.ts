@@ -93,3 +93,14 @@ export function useStoreDefault(storeId: string | null) {
   );
   return { loaded: storeId !== null && query.isSuccess, categoryId: query.data?.defaultCategoryId ?? null };
 }
+
+/** Merges one hierarchy entry into another on the same level (SPEC.md §5 Rules). */
+export function useMergeCategory() {
+  const invalidate = useInvalidate();
+  return useMutation(api.catalog.categories.merge.mutationOptions({ onSuccess: invalidate }));
+}
+
+export function useMergeTag() {
+  const invalidate = useInvalidate();
+  return useMutation(api.catalog.tags.merge.mutationOptions({ onSuccess: invalidate }));
+}

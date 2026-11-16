@@ -30,6 +30,12 @@ export function createCatalogRouter(service: CatalogService) {
         return result.value;
       }),
 
+      merge: os.catalog.items.merge.handler(({ input, errors }) => {
+        const result = service.mergeItems(input.id, input.intoId);
+        if (result.ok) return result.value;
+        throw result.error.kind === "same" ? errors.SAME() : errors.ITEM_NOT_FOUND();
+      }),
+
       labels: os.catalog.items.labels.handler(({ input }) => ({
         items: [...service.itemLabels(input.ids)].map(([id, labels]) => ({
           id,
@@ -80,6 +86,19 @@ export function createCatalogRouter(service: CatalogService) {
         return { outcome: result.value };
       }),
 
+      merge: os.catalog.categories.merge.handler(({ input, errors }) => {
+        const result = service.mergeCategories(input.id, input.intoId);
+        if (result.ok) return { category: result.value };
+        switch (result.error.kind) {
+          case "same":
+            throw errors.SAME();
+          case "different-level":
+            throw errors.DIFFERENT_LEVEL();
+          case "not-found":
+            throw errors.CATEGORY_NOT_FOUND();
+        }
+      }),
+
       restore: os.catalog.categories.restore.handler(({ input, errors }) => {
         const result = service.restoreCategory(input.id);
         if (!result.ok) throw errors.CATEGORY_NOT_FOUND();
@@ -112,6 +131,12 @@ export function createCatalogRouter(service: CatalogService) {
         const result = service.restoreTag(input.id);
         if (!result.ok) throw errors.TAG_NOT_FOUND();
         return { tag: result.value };
+      }),
+
+      merge: os.catalog.tags.merge.handler(({ input, errors }) => {
+        const result = service.mergeTags(input.id, input.intoId);
+        if (result.ok) return { tag: result.value };
+        throw result.error.kind === "same" ? errors.SAME() : errors.TAG_NOT_FOUND();
       }),
     },
 
@@ -147,6 +172,12 @@ export function createCatalogRouter(service: CatalogService) {
         if (!result.ok)
           throw result.error.kind === "name-taken" ? errors.STORE_NAME_TAKEN() : errors.STORE_NOT_FOUND();
         return { store: result.value };
+      }),
+
+      merge: os.catalog.stores.merge.handler(({ input, errors }) => {
+        const result = service.mergeStores(input.id, input.intoId);
+        if (result.ok) return result.value;
+        throw result.error.kind === "same" ? errors.SAME() : errors.STORE_NOT_FOUND();
       }),
 
       setDefaultCategory: os.catalog.stores.setDefaultCategory.handler(({ input, errors }) => {

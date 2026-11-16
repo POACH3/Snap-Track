@@ -24,9 +24,11 @@ import {
 import { planStoreLearning, type LearningChange, type LearningPlan } from "../domain/learning.ts";
 import { rankSuggestions } from "../domain/suggestions.ts";
 import type {
+  CatalogMergeListener,
   CategoryRepository,
   ItemIdentifierRepository,
   ItemRepository,
+  MergeRepository,
   PurchaseLabelUsage,
   StoreIdentifierRepository,
   StoreIdentifierRow,
@@ -35,6 +37,7 @@ import type {
 } from "../ports.ts";
 import { createItemCatalog, type ConfirmedLine, type ItemNotFound } from "./item-catalog.ts";
 import { createLabelCatalog, type CategoryNotFound } from "./label-catalog.ts";
+import { createMergeCatalog } from "./merge-catalog.ts";
 
 export interface CatalogDeps {
   stores: StoreRepository;
@@ -44,6 +47,8 @@ export interface CatalogDeps {
   categories: CategoryRepository;
   tags: TagRepository;
   usage: PurchaseLabelUsage;
+  merges: MergeRepository;
+  mergeListener: CatalogMergeListener;
   transaction: Transaction;
 }
 
@@ -134,9 +139,12 @@ export function createCatalogService(deps: CatalogDeps) {
   const answerMap = (answers: readonly IdentifierAnswer[]) =>
     new Map(answers.map((answer) => [answer.key, answer.move]));
 
+  const mergeCatalog = createMergeCatalog(deps, { storeDetail, itemDetail: itemCatalog.itemDetail });
+
   return {
     ...itemCatalog,
     ...labelCatalog,
+    ...mergeCatalog,
 
     /** A store's default category: what its lines without their own or their item's get. */
     storeDefaultCategory(storeId: Id): Id | null {

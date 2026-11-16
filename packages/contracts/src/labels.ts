@@ -44,6 +44,8 @@ const CATEGORY_NAME_TAKEN = {
   message: "Another entry in the same place already has that name.",
 } as const;
 const TAG_NOT_FOUND = { status: 404, message: "No such tag." } as const;
+const MERGE_INPUT = z.object({ id: z.uuid(), intoId: z.uuid() });
+const SAME = { status: 400, message: "Choose a different one to merge into." } as const;
 const TAG_NAME_TAKEN = { status: 409, message: "Another tag already has that name." } as const;
 
 export const categoriesContract = {
@@ -76,6 +78,19 @@ export const categoriesContract = {
     .input(z.object({ id: z.uuid() }))
     .output(z.object({ outcome: RemoveOutcome }))
     .errors({ CATEGORY_NOT_FOUND }),
+  /**
+   * Merges `id` into `intoId`, on the same level (SPEC.md §5 Rules): its children move under the
+   * kept entry (one with the same name as a child there merges into it), and everything that had
+   * it has the kept one. `id` is then gone.
+   */
+  merge: procedure
+    .input(MERGE_INPUT)
+    .output(z.object({ category: Category }))
+    .errors({
+      CATEGORY_NOT_FOUND,
+      SAME,
+      DIFFERENT_LEVEL: { status: 400, message: "Entries merge only on the same level." },
+    }),
   /** Back in the pickers; also brings back the archived entries above it. */
   restore: procedure
     .input(z.object({ id: z.uuid() }))
@@ -105,6 +120,11 @@ export const tagsContract = {
     .input(z.object({ id: z.uuid() }))
     .output(z.object({ tag: Tag }))
     .errors({ TAG_NOT_FOUND }),
+  /** Merges `id` into `intoId`: items and purchases that had it have the kept tag. `id` is then gone. */
+  merge: procedure
+    .input(MERGE_INPUT)
+    .output(z.object({ tag: Tag }))
+    .errors({ TAG_NOT_FOUND, SAME }),
 };
 
 export { CATEGORY_NOT_FOUND as CATEGORY_NOT_FOUND_ERROR, TAG_NOT_FOUND as TAG_NOT_FOUND_ERROR };

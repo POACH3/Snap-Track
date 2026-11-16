@@ -2,6 +2,7 @@
 export { createReceiptsModule, type ReceiptsModuleOptions } from "./adapters/receipts-module.ts";
 export { FileSystemFileStore } from "./adapters/file-system-file-store.ts";
 export { SqlitePurchaseLabelUsage } from "./adapters/sqlite-purchase-label-usage.ts";
+export { SqliteCatalogMergeListener } from "./adapters/sqlite-catalog-merge-listener.ts";
 export { SipsImageConverter } from "./adapters/sips-image-converter.ts";
 export type { ReceiptsService } from "./application/receipts-service.ts";
 export type {

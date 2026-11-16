@@ -1,4 +1,5 @@
 // Use-case tests (SPEC.md §3.5): real SQLite in memory, fakes for files, images and clock.
+import { SqliteCatalogMergeListener } from "../adapters/sqlite-catalog-merge-listener.ts";
 import { SqlitePurchaseLabelUsage } from "../adapters/sqlite-purchase-label-usage.ts";
 import { newId } from "@snaptrack/core";
 import { FakeClock } from "@snaptrack/core/testing";
@@ -45,6 +46,7 @@ beforeEach(() => {
       clock,
       transaction,
       usage: new SqlitePurchaseLabelUsage(toDrizzle(sqlite)),
+      mergeListener: new SqliteCatalogMergeListener(toDrizzle(sqlite)),
     }).service,
     transaction,
   });

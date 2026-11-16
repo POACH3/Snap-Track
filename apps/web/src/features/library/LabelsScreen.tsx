@@ -14,6 +14,8 @@ import {
   useAddCategory,
   useAddTag,
   useCategories,
+  useMergeCategory,
+  useMergeTag,
   useMoveCategory,
   useRemoveCategory,
   useRemoveTag,
@@ -24,6 +26,7 @@ import {
   useTags,
 } from "../labels/use-labels.ts";
 import styles from "./Labels.module.css";
+import { MergeDialog } from "./MergeDialog.tsx";
 import library from "./Library.module.css";
 
 type TagRow = Tag & { purchaseCount: number };
@@ -266,6 +269,9 @@ function EntryOptions({
   const move = useMoveCategory();
   const remove = useRemoveCategory();
   const restore = useRestoreCategory();
+  const merge = useMergeCategory();
+  const [merging, setMerging] = useState(false);
+  const [mergeQuery, setMergeQuery] = useState("");
   const [name, setName] = useState(entry.name);
   const [error, setError] = useState<string>();
   const [confirming, setConfirming] = useState(false);
@@ -281,7 +287,8 @@ function EntryOptions({
 
   return (
     <>
-      <Modal open size="medium" title={entry.name} busy={busy} onClose={onClose}>
+      {/* The merge picker takes its place: no window opens over another (docs/DESIGN.md, "Modals"). */}
+      <Modal open={!merging} size="medium" title={entry.name} busy={busy} onClose={onClose}>
         <p className={styles.path}>{paths.get(entry.id)}</p>
         <div className={library.inline}>
           <TextField
@@ -363,6 +370,15 @@ function EntryOptions({
               <Plus size={18} aria-hidden /> Add a class
             </Button>
           )}
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onClick={() => {
+              setMerging(true);
+            }}
+          >
+            Merge into…
+          </Button>
           {entry.archived ? (
             <Button
               variant="secondary"
@@ -399,6 +415,48 @@ function EntryOptions({
           )}
         </div>
       </Modal>
+      {merging && (
+        <MergeDialog
+          title={`Merge ${entry.name} into…`}
+          query={mergeQuery}
+          onQuery={setMergeQuery}
+          options={categories
+            .filter(
+              (c) =>
+                c.level === entry.level &&
+                c.id !== entry.id &&
+                !c.archived &&
+                (paths.get(c.id) ?? c.name).toLowerCase().includes(mergeQuery.trim().toLowerCase()),
+            )
+            .map((c) => ({ id: c.id, label: c.name, detail: paths.get(c.id) }))}
+          confirmTitle={(into) => `Merge ${entry.name} into ${into.label}?`}
+          confirmText={(into) =>
+            `Everything in ${entry.name} moves to ${into.detail ?? into.label}: its classes (one with the same name as a class there merges into it), and every item, store default and purchase that has it. ${entry.name} is then gone.`
+          }
+          confirmLabel="Merge categories"
+          busy={merge.isPending}
+          onMerge={(intoId) => {
+            merge.mutate(
+              { id: entry.id, intoId },
+              {
+                onSuccess: ({ category }) => {
+                  toast({
+                    kind: "success",
+                    title: "Merged.",
+                    detail: `${entry.name} is now part of ${category.name}.`,
+                  });
+                  setMerging(false);
+                  onClose();
+                },
+                onError: failed,
+              },
+            );
+          }}
+          onClose={() => {
+            setMerging(false);
+          }}
+        />
+      )}
       {confirming && (
         <ConfirmModal
           open
@@ -492,6 +550,7 @@ function Tags({ tags }: { tags: readonly TagRow[] }) {
       {sheet !== null && sheet !== "add" && (
         <TagOptions
           tag={sheet}
+          tags={tags}
           onClose={() => {
             setSheet(null);
           }}
@@ -556,8 +615,11 @@ function AddTag({ onDone }: { onDone: () => void }) {
   );
 }
 
-function TagOptions({ tag, onClose }: { tag: TagRow; onClose: () => void }) {
+function TagOptions({ tag, tags, onClose }: { tag: TagRow; tags: readonly TagRow[]; onClose: () => void }) {
   const toast = useToast();
+  const merge = useMergeTag();
+  const [merging, setMerging] = useState(false);
+  const [mergeQuery, setMergeQuery] = useState("");
   const rename = useRenameTag();
   const remove = useRemoveTag();
   const restore = useRestoreTag();
@@ -570,7 +632,7 @@ function TagOptions({ tag, onClose }: { tag: TagRow; onClose: () => void }) {
   };
   return (
     <>
-      <Modal open title={tag.name} busy={busy} onClose={onClose}>
+      <Modal open={!merging} title={tag.name} busy={busy} onClose={onClose}>
         <p className={styles.path}>
           {tag.purchaseCount === 1 ? "1 purchase" : `${tag.purchaseCount} purchases`}
         </p>
@@ -608,6 +670,15 @@ function TagOptions({ tag, onClose }: { tag: TagRow; onClose: () => void }) {
           </Button>
         </div>
         <div className={styles.optionButtons}>
+          <Button
+            variant="secondary"
+            disabled={busy}
+            onClick={() => {
+              setMerging(true);
+            }}
+          >
+            Merge into…
+          </Button>
           {tag.archived ? (
             <Button
               variant="secondary"
@@ -631,6 +702,47 @@ function TagOptions({ tag, onClose }: { tag: TagRow; onClose: () => void }) {
           )}
         </div>
       </Modal>
+      {merging && (
+        <MergeDialog
+          title={`Merge ${tag.name} into…`}
+          query={mergeQuery}
+          onQuery={setMergeQuery}
+          options={tags
+            .filter(
+              (t) =>
+                t.id !== tag.id &&
+                !t.archived &&
+                t.name.toLowerCase().includes(mergeQuery.trim().toLowerCase()),
+            )
+            .map((t) => ({ id: t.id, label: t.name }))}
+          confirmTitle={(into) => `Merge ${tag.name} into ${into.label}?`}
+          confirmText={(into) =>
+            `Every item and purchase tagged ${tag.name} is tagged ${into.label} instead. ${tag.name} is then gone.`
+          }
+          confirmLabel="Merge tags"
+          busy={merge.isPending}
+          onMerge={(intoId) => {
+            merge.mutate(
+              { id: tag.id, intoId },
+              {
+                onSuccess: ({ tag: kept }) => {
+                  toast({
+                    kind: "success",
+                    title: "Tags merged.",
+                    detail: `${tag.name} is now ${kept.name}.`,
+                  });
+                  setMerging(false);
+                  onClose();
+                },
+                onError: failed,
+              },
+            );
+          }}
+          onClose={() => {
+            setMerging(false);
+          }}
+        />
+      )}
       {confirming && (
         <ConfirmModal
           open

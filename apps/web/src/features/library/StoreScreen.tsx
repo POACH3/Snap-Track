@@ -16,6 +16,7 @@ import { Pill } from "../../shared/ui/Pill.tsx";
 import { TextField } from "../../shared/ui/TextField.tsx";
 import { useToast } from "../../shared/ui/toast-context.ts";
 import { StoreDefaultCard } from "./LabelCards.tsx";
+import { MergeStoreCard } from "./MergeCards.tsx";
 import styles from "./Library.module.css";
 import {
   useAddIdentifier,
@@ -72,6 +73,7 @@ export function StoreScreen() {
       />
       <Identifiers detail={query.data} />
       <AddIdentifier storeId={query.data.store.id} storeName={query.data.store.name} />
+      <MergeStoreCard storeId={query.data.store.id} storeName={query.data.store.name} />
     </div>
   );
 }
