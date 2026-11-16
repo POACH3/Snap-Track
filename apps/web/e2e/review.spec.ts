@@ -57,12 +57,15 @@ test.describe("desktop", { tag: "@desktop" }, () => {
     const first = await uploadOnDesktop(page, "review-a.jpg");
     await openWhenRead(page, first);
 
-    // Store needs confirmation: nothing is applied until a person chooses.
-    await expect(page.getByRole("heading", { name: "Review receipt" })).toBeVisible();
+    // Store needs confirmation: the receipt's name is offered, but nothing is saved until Confirm.
+    await expect(page.getByRole("heading", { name: "Fresh Mart" })).toBeVisible();
     await expect(page.getByText(/The receipt says FRESH MART #12/)).toBeVisible();
     await expect(page.getByRole("img", { name: "Photo 1 of 1" })).toBeVisible();
-    await page.getByPlaceholder("Search, or type a new store's name").fill("Fresh Mart");
-    await page.getByRole("button", { name: /Create "Fresh Mart"/ }).click();
+    // The name the receipt shows is offered, already chosen: a correct one needs no typing.
+    await expect(page.getByRole("button", { name: /Create "Fresh Mart"/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(toast(page, "Receipt confirmed.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Receipts", exact: true })).toBeVisible();
@@ -104,6 +107,8 @@ test.describe("desktop", { tag: "@desktop" }, () => {
     await openWhenRead(page, id);
     await expect(page.getByRole("heading", { name: "Review receipt" })).toBeVisible();
 
+    // Nothing was read, so there is no name to offer: it is typed.
+    await expect(page.getByRole("button", { name: /Create "/ })).toHaveCount(0);
     await page.getByPlaceholder("Search, or type a new store's name").fill("Test Kitchen");
     await page.getByRole("button", { name: /Create "Test Kitchen"/ }).click();
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
@@ -141,12 +146,12 @@ test.describe("phone", { tag: "@phone" }, () => {
     await expect(page.getByRole("button", { name: "Snap receipt" })).toBeHidden();
     await expect(page.getByRole("heading", { name: "Store", exact: true })).toBeVisible();
     await expect(page.getByRole("img", { name: "Photo 1 of 1" })).toBeInViewport();
-    const next = page.getByRole("button", { name: "Continue to items" });
-    await expect(next).toBeDisabled();
-
-    await page.getByPlaceholder("Search, or type a new store's name").fill("Corner Market");
-    await page.getByRole("button", { name: /Create "Corner Market"/ }).click();
-    await next.click();
+    // The detected name is already chosen, so Continue works without typing.
+    await expect(page.getByRole("button", { name: /Create "Corner Market"/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await page.getByRole("button", { name: "Continue to items" }).click();
 
     await expect(page.getByRole("heading", { name: "Items & totals" })).toBeVisible();
     await expect(page.getByRole("img", { name: "Photo 1 of 1" })).toBeInViewport();

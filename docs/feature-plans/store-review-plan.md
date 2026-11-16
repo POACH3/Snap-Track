@@ -1,7 +1,7 @@
 # Stage 4, part 1: stores and review
 
 **Changes SPEC.md:** §2 Requirements (F5), §4.2 Repository layout (web features), §5 Data Model (`stores`, `store_identifiers`, `receipts`), §6.4 Normalization (store identification), §6.5 Review (digital receipt, navigation, Library), §6.7 Learning (stores), §11 Stages 4 and 9, §12 Open Questions.  
-**Status:** active (built 2026-11-15 on branch `stage-4-stores-review`, commit `ea66ea5`; the manual checks below are still to do).
+**Status:** shipped (2026-11-15, branch `stage-4-stores-review`, commit `ea66ea5`; manual checks passed on real phones and through the real LLM server).
 
 Part 1 of the five Stage 4 plans (`SPEC.md` §11):
 
@@ -230,6 +230,13 @@ printed text and amounts; items, categories and tags come in parts 2 and 3.
   - Desktop: zoom buttons and a reset button, Ctrl/⌘ + scroll wheel zooms,
     drag pans.
   - Zoom is limited to between 1× and 5×.
+- **The detected name** (added after shipping, 2026-11-15): the store name
+  the receipt shows (brand guess, else logo, else printed name; a trailing
+  store number dropped, ALL CAPS given normal capitals) is offered as
+  **Create "<name>"**, and is chosen from the start when no known store is
+  suggested. A correct name needs only Continue or Confirm; typing is for a
+  wrong one. On desktop the store panel stays open until the receipt has a
+  saved store, so a pre-chosen new store is always visible.
 - **Store section:**
   - When the store needs confirmation, the screen opens on that prompt.
     Candidates are listed with the identifier that points to each, then
@@ -342,8 +349,8 @@ printed text and amounts; items, categories and tags come in parts 2 and 3.
 | A review-required receipt can be entered by hand and confirmed | Use-case test; Playwright with a recorded unreadable reply | automated |
 | Warnings come back from `checkDraft` and name their fields | Use-case test; Playwright shows a warning, fixes the figure, sees it clear | automated |
 | Every new procedure refuses requests without a session | Existing `api-protection.test.ts` walks the whole contract | automated |
-| Pinch-zoom, pan and double-tap on a real iPhone and Android phone; one-finger scroll at normal size | By hand on both phones | manual |
-| A real receipt through the real relay is matched after its company was confirmed once | By hand in development, with the owner's go-ahead (shared server) | manual |
+| Pinch-zoom, pan and double-tap on a real iPhone and Android phone; one-finger scroll at normal size | By hand on both phones | manual: passed 2026-11-15 |
+| A real receipt through the real relay is matched after its company was confirmed once | By hand in development, with the owner's go-ahead (shared server) | manual: passed 2026-11-15 |
 
 `pnpm check`, `pnpm build` (contracts change) and `pnpm test:e2e` (review is a
 critical path, §3.5) must pass.

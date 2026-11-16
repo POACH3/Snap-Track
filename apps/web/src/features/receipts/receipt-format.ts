@@ -65,3 +65,26 @@ export function paymentText(payment: Payment): string {
   const name = card !== "" ? card : (payment.method ?? "Payment");
   return `${name.charAt(0).toUpperCase()}${name.slice(1)}${last4}`;
 }
+
+/**
+ * The store name the receipt suggests, for a one-tap new store: the model's brand guess, else the
+ * logo, else the printed name. A store number ("#12") is dropped and ALL CAPS gets normal capitals.
+ */
+export function detectedName(evidence: {
+  brandGuess: string | null;
+  logoText: string | null;
+  printedName: string | null;
+}): string | null {
+  const raw = [evidence.brandGuess, evidence.logoText, evidence.printedName].find(
+    (name) => name !== null && name.trim() !== "",
+  );
+  if (raw === undefined || raw === null) return null;
+  const trimmed = raw.replace(/\s*(#|no\.?|store)\s*\d+\s*$/i, "").trim();
+  if (trimmed === "") return null;
+  const shouting = trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed);
+  return shouting
+    ? trimmed
+        .toLowerCase()
+        .replace(/(^|[\s\-/&])(\p{L})/gu, (_, start: string, letter: string) => start + letter.toUpperCase())
+    : trimmed;
+}

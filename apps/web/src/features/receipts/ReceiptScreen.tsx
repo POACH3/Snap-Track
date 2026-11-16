@@ -28,7 +28,7 @@ import {
   type FormErrors,
   type FormState,
 } from "./receipt-form.ts";
-import { STATUS_LABEL, formatTotal, shortDate } from "./receipt-format.ts";
+import { STATUS_LABEL, detectedName, formatTotal, shortDate } from "./receipt-format.ts";
 import styles from "./ReceiptScreen.module.css";
 import { identifierText, StoreChoice, type ChosenStore } from "./StoreChoice.tsx";
 import { useConfirmReceipt, useDraftWarnings, useReceipt, useRematch } from "./use-receipts.ts";
@@ -61,8 +61,16 @@ function BackLink() {
   );
 }
 
-const initialStore = (receipt: ReceiptDetail): ChosenStore =>
-  receipt.store === null ? null : { kind: "existing", store: receipt.store };
+/**
+ * The store the form starts with: the receipt's own, else, when nothing known is suggested, a new
+ * store named as the receipt shows it, so a correct name needs no typing. Still only a choice:
+ * nothing is saved until Confirm.
+ */
+function initialStore(receipt: ReceiptDetail): ChosenStore {
+  if (receipt.store !== null) return { kind: "existing", store: receipt.store };
+  const detected = detectedName(receipt.draft.storeEvidence);
+  return detected !== null && receipt.storeSuggestions.length === 0 ? { kind: "new", name: detected } : null;
+}
 const storeKey = (store: ChosenStore) =>
   store === null ? "" : store.kind === "existing" ? store.store.id : `new:${store.name.toLowerCase()}`;
 const storeLabel = (store: ChosenStore) =>
@@ -244,6 +252,7 @@ function Review({ latest }: { latest: ReceiptDetail }) {
     <StoreChoice
       printed={receipt.draft.storeEvidence.printedName ?? receipt.draft.storeEvidence.logoText}
       suggestions={receipt.storeSuggestions}
+      detected={detectedName(receipt.draft.storeEvidence)}
       value={store}
       onChange={(next) => {
         setStore(next);
@@ -314,7 +323,7 @@ function Review({ latest }: { latest: ReceiptDetail }) {
                       .join(" · ")}
                   </p>
                 </div>
-                {editing && store !== null && (
+                {editing && receipt.store !== null && (
                   <Button
                     variant="secondary"
                     onClick={() => {
@@ -325,7 +334,8 @@ function Review({ latest }: { latest: ReceiptDetail }) {
                   </Button>
                 )}
               </header>
-              {editing && (store === null || changingStore) && (
+              {/* Open until the receipt has a saved store, so a pre-chosen new store is always seen. */}
+              {editing && (receipt.store === null || changingStore) && (
                 <section className={styles.storePanel}>{storeChoice}</section>
               )}
               {fields}

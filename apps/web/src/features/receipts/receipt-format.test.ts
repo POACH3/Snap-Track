@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayBlock, paymentText, purchaseText } from "./receipt-format.ts";
+import { dayBlock, detectedName, paymentText, purchaseText } from "./receipt-format.ts";
 
 describe("receipt dates and payments as shown", () => {
   it("uses the printed date, with or without a time", () => {
@@ -26,5 +26,29 @@ describe("receipt dates and payments as shown", () => {
     expect(paymentText({ ...card, cardBrand: null, cardType: null, last4: null, method: "cash" })).toBe(
       "Cash",
     );
+  });
+});
+
+describe("the store name a receipt suggests", () => {
+  const none = { brandGuess: null, logoText: null, printedName: null };
+  it("prefers the brand guess, then the logo, then the printed name", () => {
+    expect(
+      detectedName({ brandGuess: "Trader Joe's", logoText: "TJ", printedName: "TRADER JOE'S #112" }),
+    ).toBe("Trader Joe's");
+    expect(detectedName({ ...none, logoText: "FRESH MART", printedName: "FRESH MART #12" })).toBe(
+      "Fresh Mart",
+    );
+    expect(detectedName({ ...none, printedName: "WALMART SUPERCENTER #4410" })).toBe("Walmart Supercenter");
+  });
+
+  it("drops a store number and fixes ALL CAPS, but leaves mixed case alone", () => {
+    expect(detectedName({ ...none, printedName: "CORNER MARKET Store 7" })).toBe("Corner Market");
+    expect(detectedName({ ...none, printedName: "McDonald's" })).toBe("McDonald's");
+    expect(detectedName({ ...none, printedName: "H-E-B" })).toBe("H-E-B");
+  });
+
+  it("offers nothing when nothing was read", () => {
+    expect(detectedName(none)).toBeNull();
+    expect(detectedName({ ...none, printedName: "  " })).toBeNull();
   });
 });
