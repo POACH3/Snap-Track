@@ -53,6 +53,22 @@
   opacity: 1;
 }
 
+/* iOS Safari sizes date and time inputs by their contents and ignores width: 100%, so two of them
+   side by side overflow and overlap. Without the native look they fill their column like any input. */
+.input[type="date"],
+.input[type="time"] {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  text-align: left;
+}
+.input[type="date"]::-webkit-date-and-time-value,
+.input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
 .amount {
   text-align: right;
   font-variant-numeric: tabular-nums;
