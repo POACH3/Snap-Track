@@ -45,7 +45,16 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 | `apps/server/src/modules/extraction/adapters/extraction-worker.test.ts` | Worker reads an upload at once, picks up queued receipts at start, stops promptly |
 | `apps/server/src/modules/extraction/adapters/backfill-migration.test.ts` | Migration 0003 queues a job for each receipt uploaded before extraction existed |
 | `apps/web/src/features/sync/in-memory-upload-queue.test.ts` | Upload queue: order, no duplicate ids, states, removal, change notifications |
-| `apps/web/e2e/capture.spec.ts` | Playwright: three images chosen together become three receipts; a long receipt in three photos becomes one receipt with images in order; a dropped HEIC is converted and displays; Snap and Done upload on a phone; leaving the capture screen uploads the open receipt; tab bar on phones, side navigation on desktop |
+| `apps/web/e2e/capture.spec.ts` | Playwright: three images chosen together become three receipts; a long receipt in three photos becomes one receipt with images in order; a dropped HEIC is converted and displays; Snap and Done upload on a phone; leaving the capture screen uploads the open receipt; tab bar on phones (Receipts, Analytics, Snap, Library, Settings), side navigation on desktop (profile, the five sections, Upload receipt) |
+| `packages/contracts/src/receipts.test.ts` | Confirm needs a store and a total and nothing else; negative amounts accepted (returns deferred); last four card digits only; purchase date shape; store names trimmed |
+| `apps/server/src/modules/catalog/domain/catalog-rules.test.ts` | Identifier normalization per type (names, phones, websites, email domains, addresses typed on one line); exclusion list before and after normalization; evidence → identifiers; `identifyStore` (one strong hit, all hits agree, supporting address, other company's address ignored, conflict, address only, unknown, ambiguous never matches, name types looked up against each other); suggestions (candidates, brand guess, similar names, a store learned since); `planStoreLearning` (save every identifier, no double counting, ask before moving, move or keep, stale answers ignored, cross-type names, shared address, correcting a wrong match, changing a confirmed receipt's store, ambiguous left alone) |
+| `apps/server/src/modules/catalog/adapters/sqlite-catalog-repositories.test.ts` | Store names unique ignoring case; search ignores case and treats `%`/`_` as text; counts and known names; one identifier per (type, value); find by value across types; seen, move, mark, remove; added by hand |
+| `apps/server/src/modules/catalog/application/catalog-service.test.ts` | A store learned from one receipt is known by any of its identifiers; the move question and its answer; shared addresses; review suggestions; rename; add by hand (normalized, starts matching, refuses duplicates and payment companies, asks before taking one from another store, reports a shared address); removed or ambiguous identifiers stop matching (real SQLite) |
+| `apps/server/src/modules/receipts/application/review.test.ts` | Stage 4 part 1 use cases on real SQLite with the real catalog module: second receipt matched after one confirm; conflict and address-only flagged; a corrected match stays corrected; the move question saves nothing until answered; confirm needs only a store and a total; stale forms refused; a person's entry kept when extraction finishes later; review-required entered by hand; lines kept, added, removed and reordered by id; re-match only on request; the amount when no total was read; the review filter and counts; warnings for a draft |
+| `apps/web/src/shared/ui/zoom.test.ts` | Image viewer geometry: the pinch point stays still, 1×–5× limits, no gaps at the edges, a long receipt scrolls at fit width, narrow content centered |
+| `apps/web/src/features/receipts/receipt-form.test.ts` | Amounts and quantities as typed; the form round-trips a draft; field errors named and nothing sent; card digits; empty rows dropped; split; warnings placed by field |
+| `apps/web/src/features/receipts/receipt-format.test.ts` | Printed dates with and without a time, the capture-time fallback, payment names |
+| `apps/web/e2e/review.spec.ts` | Playwright: desktop — create a store on a first receipt, confirm, the row expands into the digital receipt, View receipt image opens it read-only beside the photo, a second location sharing the website is matched, Library › Stores lists the learned identifiers; a review-required receipt typed in by hand, total required, leaving with changes asks first. Phone — no tab bar on the receipt page; the edit card and photo both on screen; store page, then items and totals; a warning clears when the line is fixed; confirm |
 | `apps/server/src/testing/api-protection.test.ts` | Walks the whole contract: every non-public procedure refuses requests without a valid session |
 | `tooling/boundaries.test.ts` | Each boundary rule fires on its deliberate violation in `tooling/boundary-fixtures/` |
 
@@ -62,7 +71,11 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
   (plays back replies, records requests) and `output()`. `createTestApp()` uses one with no
   replies and doesn't start the worker; the e2e server doesn't start it either.
 - `apps/web/e2e/fixtures/`: three small JPEGs of different widths and one HEIC, made with
-  `makeRealImage()`.
+  `makeRealImage()`; and `review-a.jpg` (720 px wide), `review-b.jpg` (760), `review-phone.jpg` (880)
+  and `review-unreadable.jpg` (840), whose widths pick their replies.
+- `apps/server/src/testing/e2e-extractor.ts`: `E2eExtractor`, the e2e server's stand-in for the LLM
+  server: reads the first photo's width and replies with the recorded receipt for it (`E2E_REPLIES`);
+  any other photo gets an unknown store and a total. Never used outside tests.
 - `apps/server/src/modules/auth/testing/fake-password-hasher.ts`: instant stand-in for Argon2.
 - `@snaptrack/core/testing`: `FakeClock`.
 - `apps/server/src/platform/db/testing/test-database.ts`: `createTestDatabase()`, a
@@ -73,6 +86,8 @@ typecheck, boundaries, tests); tests alone with `pnpm test`.
 - Web client components (no component tests); the capture and upload paths are covered by Playwright.
 - Real phones: camera capture on Android and iPhone, choosing from an iPhone library, and an
   iPhone HEIC's rotation are checked by hand (`docs/feature-plans/capture-and-upload-plan.md`).
+- Pinch-zoom, pan and double-tap on a real iPhone and Android phone (Playwright can't pinch);
+  checked by hand (`docs/feature-plans/store-review-plan.md`).
 - The real LLM server: one manual request with the owner's go-ahead (`docs/feature-plans/extraction-plan.md`).
 - Login screen in Playwright: used by every end-to-end test, but its error cases are not.
 - `pnpm user:create` / `user:set-password` prompts: checked by hand with piped input against a scratch database.

@@ -1,0 +1,321 @@
+/* Receipt fields (docs/DESIGN.md, "Receipts screens", "Text field / area"). */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-body);
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-page);
+  color: var(--text-heading);
+  font: inherit;
+  font-size: 15px;
+  transition: border-color var(--transition);
+}
+.input::placeholder {
+  color: var(--text-muted);
+}
+.input:hover:not(:disabled) {
+  border-color: var(--border-hover);
+}
+.input:disabled {
+  border-color: transparent;
+  background: transparent;
+  padding-inline: 0;
+  opacity: 1;
+}
+
+.amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.invalid,
+.invalid:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+.warned,
+.warned:hover:not(:disabled) {
+  border-color: var(--warning);
+}
+
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+/* Consistency warning (docs/DESIGN.md, "Receipts screens"). */
+.warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.warning {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+  background: var(--warning-tint);
+  color: var(--text-body);
+  font-size: 13px;
+  text-align: left;
+}
+.warningIcon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warning);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.subhead {
+  margin: 16px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+.subhead:first-child {
+  margin-top: 0;
+}
+
+.muted {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+/* Phone lines: printed name, amount, options. */
+.lineRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.lineRow > .field:first-child {
+  flex: 1 1 auto;
+}
+.lineAmount {
+  flex: none;
+  width: 84px;
+}
+
+/* Desktop lines: a table of printed name, quantity, unit price, amount, options. */
+.linesCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+}
+.tableHead,
+.tableRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px 96px 96px 40px;
+  gap: 8px;
+  align-items: start;
+}
+.tableHead {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.tableHead span:nth-child(n + 2) {
+  text-align: right;
+}
+
+.iconButton {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-top: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-body);
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.iconButton:hover:not(:disabled) {
+  border-color: var(--border-hover);
+}
+.iconButton:disabled {
+  visibility: hidden;
+}
+
+.add {
+  align-self: flex-start;
+}
+.add:disabled {
+  display: none;
+}
+
+/* Totals: label on the left, amount on the right. */
+.totals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.totalRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  align-items: center;
+  column-gap: 12px;
+}
+.totalRow > .label {
+  font-size: 15px;
+}
+.totalRow > .error,
+.totalRow > .warnings {
+  grid-column: 1 / -1;
+}
+.grand > .label,
+.grand > .input {
+  font-weight: 700;
+  color: var(--text-heading);
+}
+
+.bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  align-items: start;
+}
+.bottom > .totals {
+  order: 2;
+}
+
+/* Collapsed sections (docs/DESIGN.md, "Receipts screens"). */
+.sections {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+.section + .section {
+  border-top: 1px solid var(--border);
+}
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--text-heading);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.summary::-webkit-details-marker {
+  display: none;
+}
+.chevron {
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+.section[open] .chevron {
+  transform: rotate(180deg);
+}
+.sectionBody {
+  padding: 4px 14px 16px;
+}
+
+.textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-page);
+  color: var(--text-heading);
+  font: inherit;
+  resize: vertical;
+}
+
+.transcription {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: var(--radius-small);
+  background: var(--surface-raised);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.optionsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.span2 {
+  grid-column: 1 / -1;
+}
+
+.rowGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)) 40px;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}

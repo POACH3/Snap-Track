@@ -11,5 +11,6 @@ Files here are plans for implementing features, one per feature. A plan that cha
 | [accounts-plan.md](accounts-plan.md) | §9 | shipped (2026-11-15) |
 | [capture-and-upload-plan.md](capture-and-upload-plan.md) | §4.3, §4.4, §5, §6.1, §6.8, §12 | shipped (2026-11-15) |
 | [extraction-plan.md](extraction-plan.md) | §4.1, §4.3, §5, §6.3, §6.3.1, §11, §12 | shipped (2026-11-15) |
+| [store-review-plan.md](store-review-plan.md) | §2, §4.2, §5, §6.4, §6.5, §6.7, §11, §12 | active (built, not committed; manual checks to do) |
 
 To add a plan: name it `<feature>-plan.md`, add the `Changes SPEC.md` and `Status` lines under its title, and add a row here.

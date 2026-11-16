@@ -1,0 +1,12 @@
+.success {
+  flex: none;
+  color: var(--success);
+}
+.warning {
+  flex: none;
+  color: var(--warning);
+}
+.muted {
+  flex: none;
+  color: var(--text-muted);
+}

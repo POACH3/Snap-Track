@@ -62,6 +62,7 @@ SnapTrack should feel calm, quiet and trustworthy: a dark charcoal room with a d
 | Accent tint / border | `rgba(39,103,73,0.24)` / `rgba(104,211,145,0.28)` | `--accent-tint` / `--accent-tint-border`. Highlighted chips. |
 | Surface fill | `#1C201E` | `--surface`. Cards, panels, tables. |
 | Background scrim | `rgba(8,10,9,0.55)` | `--scrim`. Behind modals. |
+| Photo backdrop | `#2A2F2C` / text `#C9D1CC` | `--photo-backdrop` / `--on-photo-backdrop`. Behind receipt photos, in both themes, so paper looks the same in each. |
 | Error | `#F87171` | `--danger`. Field errors, error toasts. |
 | Success | `#68D391` | `--success`. Same value as `--accent-text`. |
 | Warning | `#F6AD55` | `--warning`, tint `--warning-tint` `rgba(246,173,85,0.14)`, border `--warning-border` `rgba(246,173,85,0.3)`. "Review required", stale queue. |
@@ -184,8 +185,10 @@ Component names below are placeholders until the client exists. **(proposed)**
 | Notification after an action | Toast |
 | Empty list | Empty state: one sentence plus the action that fills the list |
 | Tabs | Phone: glass tab bar. Desktop: segmented control **(proposed)** |
-| Side navigation (640px and up) | Solid, not glass: a column on the page background with the main action button on top, then 44px-tall items (20px icon, 15px label, `--text-body`, 12px radius). Hover: `--surface-raised` fill. Selected: `--surface-raised` fill with `--accent-text` icon and label. The main action is hidden on a screen that has its own, so each screen keeps one. **(proposed)** |
+| Side navigation (640px and up) | Solid, not glass: a column on the page background with a 1px `--border` on its right. From the top: the SnapTrack name (18px / 700), the profile button (52px, `--surface` fill, `--border`, 12px radius: a 32px round initial in `--accent-tint` with `--accent-text`, the display name, a chevron; opens a menu with the name and **Log out**), 28px of space, the sections (Receipts, Analytics, Budget, Library, Settings) as 44px-tall items (20px icon, 15px label, `--text-body`, 12px radius), then 28px of space and the main action, **Upload receipt**. Hover: `--surface-raised` fill. Selected: `--surface-raised` fill with `--accent-text` icon and label. The main action is hidden on a screen that has its own, so each screen keeps one. No top bar at any width (decided 2026-11-15, receipts mock). |
+| Phone tab bar | Receipts, Analytics, the raised **Snap** button, Library, Settings. Hidden on the receipt page, whose edit card holds its actions (decided 2026-11-15). |
 | Status and categories | Pill: 26px tall, fully round, 13px / 500. Variants: plain, accent, warning, price up, price down |
+| Receipt status in the receipts list | No pill and no word: a 16px Lucide icon in the status color beside the amount, with the status as its `aria-label`. Confirmed: `circle-check`, `--success`. Unreviewed: `circle-dashed`, `--warning`. Review required: `circle-alert`, `--warning`. Being read (uploaded, extracting): `clock`, `--text-muted`. Color and icon shape both carry the status, so it never depends on color alone (decided 2026-11-15; icons and colors **(proposed)**) |
 | Icons | Lucide only, 2px stroke, 18px in buttons, 20px in the tab bar, 14px in pills |
 
 ### Action buttons
@@ -216,6 +219,21 @@ One loading component for every wait on content, in a page, a section or a modal
 | Leaving | Fade out over 160ms as content arrives |
 | Page placement | Fills the content area below the top bar |
 | Section placement | Fills the section at the size of the content it stands for |
+
+### Receipts screens
+
+Approved 2026-11-15 in the receipts mock (https://claude.ai/code/artifact/63f6b028-6a8a-4a72-b1c6-7934841039cd, private to the developer).
+
+| Part | Look |
+|---|---|
+| Receipts list row | Receipt row (Surface, 16px radius, 12px × 14px). Left: a 40px date block, month in 11px / 600 uppercase `--text-muted`, day in 20px / 700 heading color. Middle: the store name, 15px / 600 heading color, or "Unknown store" / "Reading receipt…" in `--text-muted`. Right: the amount (600, tabular) and the status icon (see "Receipt status"). No thumbnail, no status word. |
+| Review filter | Chips above the list: All, Unreviewed · N, Review required · N. Pill shape, 32px tall; the selected one uses `--accent-tint` with `--accent-tint-border` and `--accent-text`. |
+| Digital receipt | A confirmed row expands in place (the row is a button with `aria-expanded`). Below a 1px dashed `--border` rule: store and date line (13px muted), each line with its price (14px, tabular), another dashed rule, Subtotal / Tax (plus receipt discount and tip when present) / **Total** (700), "Paid with" the payment, and **View receipt image** (accent text link with an image icon, 44px tall) centered at the bottom. |
+| Receipt page, phone (below 1024px) | Fills the screen; no tab bar. A row with the back link (‹ Receipts) and the date and person (13px muted). Then the **edit card** (Surface, 16px radius) over the **photo card** (Surface, 16px radius, the photo inset 4px with a 12px radius, nothing else in it), both always visible. The edit card has two pages: **Store** ("1 of 2"; the store question; footer button **Continue to items**, disabled until a store is chosen) and **Items & totals** ("2 of 2"; the store and a **Change store** link under the heading; its body scrolls inside the card; footer button **Confirm**, full width). |
+| Receipt page, desktop (1024px and up) | The form on the left, the photo pane on the right (400px), side by side. The form's header is the store (30px / 700) with how it was matched below it (13px muted) and a secondary **Change store** button. Lines are a table: printed name, quantity, unit price, amount, and a 40px "⋯" options button. Totals sit in a 280px column beside the collapsed sections, with **Confirm** under them. The photo pane's zoom buttons (zoom out, zoom in, **Fit**) are at its bottom, right-aligned. |
+| Store choice | Each suggestion is a 56px button (`--surface-raised`, `--border`, 12px radius): store name 15px / 600, the reason in 13px muted below ("Its phone number … is saved for this store", "Similar name"). The chosen one uses `--accent-tint`, `--accent-tint-border` and a check icon. Below: "Another store", a search input that also offers **Create "<name>"**. |
+| Consistency warning | Under the field it concerns: `--warning-tint` box with `--warning-border`, 12px radius, a 16px `triangle-alert` icon in `--warning`, 13px body text saying what doesn't add up. The field itself gets a `--warning` border. |
+| Collapsed sections | Note, More details, Store details as printed, Transcription: 44px rows with a chevron, inside one bordered box; each opens in place. |
 
 ## Overlays
 

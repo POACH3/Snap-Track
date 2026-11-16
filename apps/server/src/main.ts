@@ -8,6 +8,7 @@ import { createHttpServer } from "./platform/http/create-http-server.ts";
 import { os } from "./platform/http/rpc.ts";
 import { systemClock } from "./platform/system-clock.ts";
 import { createAuthModule } from "./modules/auth/index.ts";
+import { createCatalogModule } from "./modules/catalog/index.ts";
 import { createExtractionModule, RelayExtractor } from "./modules/extraction/index.ts";
 import { healthRouter } from "./modules/health/index.ts";
 import { createReceiptsModule, FileSystemFileStore, SipsImageConverter } from "./modules/receipts/index.ts";
@@ -56,6 +57,8 @@ const auth = createAuthModule({
   secureCookies: PUBLIC_ORIGIN.startsWith("https://"),
 });
 
+const catalog = createCatalogModule({ db, clock: systemClock, transaction });
+
 // The service writes only under its data folder (SPEC.md §4.7), which holds IMAGE_DIR.
 mkdirSync(IMAGE_DIR, { recursive: true });
 const receipts = createReceiptsModule({
@@ -65,6 +68,7 @@ const receipts = createReceiptsModule({
   files: new FileSystemFileStore(IMAGE_DIR),
   converter: new SipsImageConverter(),
   users: auth.service,
+  catalog: catalog.service,
   // Each new receipt is queued for extraction in the transaction that saves it (SPEC.md §4.3).
   onUploaded: {
     receiptUploaded: (receiptId) => {
@@ -94,7 +98,12 @@ const extraction = createExtractionModule({
   },
 });
 
-const router = os.router({ auth: auth.router, health: healthRouter, receipts: receipts.router });
+const router = os.router({
+  auth: auth.router,
+  catalog: catalog.router,
+  health: healthRouter,
+  receipts: receipts.router,
+});
 
 const app = createHttpServer({
   router,

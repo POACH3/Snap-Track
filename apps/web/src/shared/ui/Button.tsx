@@ -4,9 +4,10 @@ import styles from "./Button.module.css";
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /**
    * primary: the one main action on a screen. secondary: low emphasis beside it (Cancel, Back,
-   * other ways to do the same thing). ghost: low emphasis in a toolbar (docs/DESIGN.md).
+   * other ways to do the same thing). ghost: low emphasis in a toolbar. danger: deletes or
+   * removes data (docs/DESIGN.md, "Action buttons").
    */
-  variant?: "primary" | "secondary" | "ghost";
+  variant?: "primary" | "secondary" | "ghost" | "danger";
   /** While the action runs the button keeps its size and label, and is disabled. */
   busy?: boolean;
   fullWidth?: boolean;

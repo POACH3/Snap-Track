@@ -1,0 +1,82 @@
+/* Receipt photo viewer (docs/DESIGN.md, "Receipts screens"). */
+.viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--photo-backdrop);
+  /* The viewer handles every gesture itself, pinch included. */
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.frame:active {
+  cursor: grabbing;
+}
+
+.content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.missing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 200px;
+  color: var(--on-photo-backdrop);
+  font-size: 13px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.tool {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-body);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.tool:hover {
+  border-color: var(--border-hover);
+}
+
+.fit {
+  padding: 0 12px;
+}

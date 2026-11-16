@@ -30,3 +30,21 @@ own spec says its services are started and stopped by hand and never start by th
   project), and close or reword the §12 row. Docs only; no checks needed.
 - Before doing it, decide: whether the LLM server should start at boot after all (an
   LLM-Server project decision).
+
+## Receipt thumbnails are made but no longer shown (added 2026-11-15)
+
+The receipts list stopped showing thumbnails when it became a list of collapsed digital receipts
+(`docs/feature-plans/store-review-plan.md`, Stage 4 part 1). The server still makes a 400 px
+thumbnail for every uploaded photo.
+
+- Where: `apps/server/src/modules/receipts/application/receipts-service.ts` (`prepareImage`,
+  `putReceipt`), `domain/image-plan.ts` (`thumbnailSize`), `domain/image-keys.ts`,
+  `adapters/image-routes.ts` (thumbnail route), `receiptThumbnailPath` in
+  `packages/contracts/src/receipts.ts`, `receipt_images.thumbnail_key`, and `SPEC.md` §5
+  (`thumbnail_key` "for the receipts list") and §6.8.
+- Why: work and disk space for a file nothing shows.
+- Why it can wait: thumbnails are small, and nothing breaks while they are made.
+- To fix: either find them a use (e.g. the receipt page's photo strip while the full image loads)
+  and update §5, or stop making them: drop the thumbnail step and route, keep the column until a
+  migration removes it. Then `pnpm check`, `pnpm build` and `pnpm test:e2e`.
+- Before doing it, decide: use them somewhere, or remove them.

@@ -1,21 +1,93 @@
-import type { ReceiptStatus } from "@snaptrack/contracts";
-import type { Id, PixelSize } from "@snaptrack/core";
-import type { ExtractionResult } from "./domain/extracted-data.ts";
+import type {
+  IdentifierAnswer,
+  IdentifierQuestion,
+  LearningNotice,
+  ReceiptStatus,
+  StoreEvidence,
+  StoreIssue,
+  StoreMatch,
+  StoreMatchedBy,
+  StoreRef,
+  StoreSuggestion,
+} from "@snaptrack/contracts";
+import type { Id, PixelSize, Result } from "@snaptrack/core";
+import type { ExtractionResult, ReceiptData } from "./domain/extracted-data.ts";
 import type { ListPosition } from "./domain/list-cursor.ts";
-import type { Receipt, ReceiptImage, ReceiptWithImages } from "./domain/receipt.ts";
+import type { NewReceipt, ReceiptImage, ReceiptRecord, ReceiptWithImages } from "./domain/receipt.ts";
+import type { ReviewedLine } from "./domain/review.ts";
+
+/** The store a receipt is set to, and how. */
+export interface ReceiptStore {
+  storeId: Id;
+  matchedBy: StoreMatchedBy;
+  /** What made an automatic match; null otherwise. */
+  match: StoreMatch | null;
+}
+
+/** A confirmed review, as saved. */
+export interface Review {
+  data: ReceiptData;
+  lines: readonly ReviewedLine[];
+  note: string | null;
+  store: ReceiptStore;
+  confirmedByUserId: Id;
+}
 
 /** Repositories are synchronous (SPEC.md §3.1 rule 7). */
 export interface ReceiptRepository {
   findById(id: Id): ReceiptWithImages | undefined;
+  /** Everything stored about a receipt, lines included. */
+  findRecord(id: Id): ReceiptRecord | undefined;
   /** Saves a receipt and all its images. Returns false, saving nothing, if the id is taken. */
-  insert(receipt: Receipt, images: readonly ReceiptImage[]): boolean;
-  /** Newest first by capture time, then id; only receipts after `after` when given. */
-  list(options: { after: ListPosition | undefined; limit: number }): ReceiptWithImages[];
+  insert(receipt: NewReceipt, images: readonly ReceiptImage[]): boolean;
+  /** Newest first by capture time, then id; only receipts after `after`, and of `status`, when given. */
+  list(options: {
+    after: ListPosition | undefined;
+    limit: number;
+    status?: "unreviewed" | "review_required" | undefined;
+  }): ReceiptWithImages[];
   findImage(imageId: Id): ReceiptImage | undefined;
   /** Changes the status only if it is now one of `from`. Returns whether it changed. */
   setStatus(id: Id, status: ReceiptStatus, from: readonly ReceiptStatus[]): boolean;
-  /** Replaces the extracted data and line items, and sets the status. */
-  saveExtraction(id: Id, result: ExtractionResult, status: ReceiptStatus): void;
+  /** Replaces the extracted data and line items, and sets the status and the store it identified. */
+  saveExtraction(
+    id: Id,
+    result: ExtractionResult,
+    status: ReceiptStatus,
+    store: ReceiptStore | undefined,
+  ): void;
+  /**
+   * Saves a review and marks the receipt confirmed. Lines with an id the receipt has are updated
+   * in place (keeping what is attached to them), other lines are added, and lines left out are
+   * removed.
+   */
+  saveReview(id: Id, review: Review): void;
+  /** How many receipts have each status that is waiting for a person. */
+  countWaiting(): { unreviewed: number; reviewRequired: number };
+  /** Receipts not confirmed, with no store and some store evidence: the ones re-matching could fix. */
+  listUnidentified(): { id: Id; evidence: StoreEvidence }[];
+  /** Sets the store of a receipt that still has none and isn't confirmed. Returns whether it changed. */
+  setIdentifiedStore(id: Id, store: ReceiptStore): boolean;
+}
+
+/**
+ * What `receipts` needs from `catalog` (SPEC.md §4.3): identifying stores, suggesting them,
+ * creating them, and learning from confirmed receipts. Synchronous, so it can share a
+ * transaction with the receipt's own changes. Supplied by `catalog`, wired in the composition root.
+ */
+export interface StoreCatalog {
+  identifyStore(evidence: StoreEvidence): { storeId: Id; match: StoreMatch } | undefined;
+  reviewStore(evidence: StoreEvidence): { issue: StoreIssue; suggestions: StoreSuggestion[] };
+  learnFromConfirmedReceipt(input: {
+    receiptId: Id;
+    storeId: Id;
+    evidence: StoreEvidence;
+    previous: { storeId: Id | null; matchedBy: StoreMatchedBy | null; alreadyCounted: boolean };
+    answers: readonly IdentifierAnswer[];
+  }): Result<{ notices: LearningNotice[] }, { kind: "needs-answers"; questions: IdentifierQuestion[] }>;
+  createStore(name: string): Result<StoreRef, { kind: "name-taken" }>;
+  findStore(id: Id): StoreRef | undefined;
+  storeRefs(ids: readonly Id[]): Map<Id, StoreRef>;
 }
 
 /**
