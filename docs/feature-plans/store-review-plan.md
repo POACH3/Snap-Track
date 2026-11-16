@@ -1,7 +1,7 @@
 # Stage 4, part 1: stores and review
 
 **Changes SPEC.md:** §2 Requirements (F5), §4.2 Repository layout (web features), §5 Data Model (`stores`, `store_identifiers`, `receipts`), §6.4 Normalization (store identification), §6.5 Review (digital receipt, navigation, Library), §6.7 Learning (stores), §11 Stages 4 and 9, §12 Open Questions.  
-**Status:** active (built 2026-11-15, not yet committed; the manual checks below are still to do).
+**Status:** active (built 2026-11-15 on branch `stage-4-stores-review`, commit `ea66ea5`; the manual checks below are still to do).
 
 Part 1 of the five Stage 4 plans (`SPEC.md` §11):
 
