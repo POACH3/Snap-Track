@@ -131,10 +131,11 @@
   background: var(--surface);
 }
 
-/* ---------- Phone: the edit card over the photo card, both always on screen. ---------- */
+/* ---------- Phone: the photo card over the edit card, both always on screen. ---------- */
 .phone {
   display: grid;
-  grid-template-rows: auto minmax(0, 1.25fr) minmax(0, 1fr);
+  /* The photo card over the edit card (docs/DESIGN.md, "Receipts screens"). */
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1.25fr);
   gap: 12px;
   height: calc(100dvh - 26px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
 }

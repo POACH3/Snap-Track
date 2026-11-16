@@ -372,6 +372,11 @@ function Review({ latest }: { latest: ReceiptDetail }) {
             <BackLink />
             <span className={styles.meta}>{byline}</span>
           </div>
+          {sources.length > 0 && (
+            <section aria-label="Photo" className={styles.photoCard}>
+              <ImageViewer sources={sources} className={styles.photoViewer} />
+            </section>
+          )}
           <section className={styles.editCard} aria-labelledby="edit-heading">
             {editing && step === "store" ? (
               <>
@@ -426,11 +431,6 @@ function Review({ latest }: { latest: ReceiptDetail }) {
               </>
             )}
           </section>
-          {sources.length > 0 && (
-            <section aria-label="Photo" className={styles.photoCard}>
-              <ImageViewer sources={sources} className={styles.photoViewer} />
-            </section>
-          )}
         </div>
       )}
 

@@ -210,8 +210,8 @@ printed text and amounts; items, categories and tags come in parts 2 and 3.
   receipts open read-only with **Edit**, which turns into **Save**. Layouts
   as approved in the mock (2026-11-15; recorded in `docs/DESIGN.md`,
   "Receipts screens"):
-  - **Phone (below 1024px):** no tab bar. An edit card over a photo card,
-    both always on screen. The edit card's first page is the store
+  - **Phone (below 1024px):** no tab bar. A photo card over an edit card,
+    both always on screen (photo moved on top 2026-11-15). The edit card's first page is the store
     (**Continue to items**, disabled until a store is chosen); its second
     page is items and totals, with a **Change store** link under the heading,
     its body scrolling inside the card, and **Confirm** filling the footer.
