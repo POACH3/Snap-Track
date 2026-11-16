@@ -6,7 +6,7 @@ import {
   type ReceiptDetail,
   type ReceiptDraft,
 } from "@snaptrack/contracts";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useBlocker, useNavigate, useParams } from "react-router";
@@ -18,7 +18,6 @@ import { ConfirmModal } from "../../shared/ui/ConfirmModal.tsx";
 import { EmptyState } from "../../shared/ui/EmptyState.tsx";
 import { ImageViewer } from "../../shared/ui/ImageViewer.tsx";
 import { Loader } from "../../shared/ui/Loader.tsx";
-import { Modal } from "../../shared/ui/Modal.tsx";
 import { useToast } from "../../shared/ui/toast-context.ts";
 import { ReceiptFields, type Update } from "./ReceiptFields.tsx";
 import { SetAllLines } from "./LineLabels.tsx";
@@ -32,8 +31,17 @@ import {
 } from "./receipt-form.ts";
 import { STATUS_LABEL, detectedName, formatTotal, shortDate } from "./receipt-format.ts";
 import styles from "./ReceiptScreen.module.css";
+import { MoveQuestions } from "./MoveQuestions.tsx";
 import { identifierText, StoreChoice, type ChosenStore } from "./StoreChoice.tsx";
-import { useConfirmReceipt, useDraftWarnings, useReceipt, useRematch } from "./use-receipts.ts";
+import { DuplicateWarnings } from "./DuplicateWarnings.tsx";
+import {
+  useConfirmReceipt,
+  useDeleteReceipt,
+  useDismissDuplicate,
+  useDraftCheck,
+  useReceipt,
+  useRematch,
+} from "./use-receipts.ts";
 
 /** The receipt page (SPEC.md §6.5): the photo beside every field, for review, entry by hand, or a later look. */
 export function ReceiptScreen() {
@@ -77,6 +85,18 @@ const storeKey = (store: ChosenStore) =>
   store === null ? "" : store.kind === "existing" ? store.store.id : `new:${store.name.toLowerCase()}`;
 const storeLabel = (store: ChosenStore) =>
   store === null ? null : store.kind === "existing" ? store.store.name : store.name;
+
+/** "The Fresh Mart receipt from Nov 13, its photo and its 6 lines will be removed from every total." */
+function deleteText(receipt: ReceiptDetail): string {
+  const store = receipt.store?.name ?? "unknown store's";
+  const lines = receipt.draft.lines.length;
+  const parts = [
+    receipt.images.length === 0 ? null : receipt.images.length === 1 ? "its photo" : "its photos",
+    lines === 0 ? null : lines === 1 ? "its 1 line" : `its ${lines} lines`,
+  ].filter(Boolean);
+  const what = receipt.source === "manual" ? "entry" : "receipt";
+  return `The ${store} ${what} from ${shortDate(receipt.purchasedAt, receipt.capturedAt)}${parts.length > 0 ? `, ${parts.join(" and ")},` : ""} will be removed from every total.`;
+}
 
 /** What the page heading says about how the store was set. */
 function matchText(receipt: ReceiptDetail): string | null {
@@ -131,7 +151,6 @@ function Review({ latest }: { latest: ReceiptDetail }) {
   const [errors, setErrors] = useState<FormErrors>({});
   const [storeError, setStoreError] = useState<string>();
   const [questions, setQuestions] = useState<IdentifierQuestion[] | null>(null);
-  const [answers, setAnswers] = useState<Record<string, boolean>>({});
   const [changed, setChanged] = useState(false);
   const [toRematch, setRematch] = useState({ stores: 0, items: 0 });
   const rematchCount = toRematch.stores + toRematch.items;
@@ -152,7 +171,15 @@ function Review({ latest }: { latest: ReceiptDetail }) {
   const draft: ReceiptDraft | undefined = "draft" in parsed ? parsed.draft : undefined;
   const dirty =
     JSON.stringify(parsed) !== initialDraft || storeKey(store) !== storeKey(initialStore(receipt));
-  const liveWarnings = useDraftWarnings(receipt.id, draft, editing && dirty);
+  const storeId = store?.kind === "existing" ? store.store.id : null;
+  const live = useDraftCheck(receipt.id, draft, storeId, editing && dirty);
+  const liveWarnings = live?.warnings;
+  const dismiss = useDismissDuplicate();
+  const remove = useDeleteReceipt();
+  const [deleting, setDeleting] = useState(false);
+  // Pairs dismissed here leave the live list at once, before the next check comes back.
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  const duplicates = (live?.duplicates ?? receipt.duplicates).filter((d) => !dismissed.has(d.receipt.id));
 
   useEffect(() => {
     if (latest.updatedAt === receipt.updatedAt) return;
@@ -243,7 +270,6 @@ function Review({ latest }: { latest: ReceiptDetail }) {
         }
         switch (error.code) {
           case "NEEDS_ANSWERS":
-            setAnswers({});
             setQuestions(error.data.questions);
             return;
           case "RECEIPT_CHANGED":
@@ -286,6 +312,39 @@ function Review({ latest }: { latest: ReceiptDetail }) {
       }}
       error={storeError}
     />
+  );
+  const duplicateWarnings = (
+    <DuplicateWarnings
+      duplicates={duplicates}
+      busy={dismiss.isPending || remove.isPending}
+      onDelete={() => {
+        setDeleting(true);
+      }}
+      onDismiss={(otherId) => {
+        dismiss.mutate(
+          { id: receipt.id, otherId },
+          {
+            onSuccess: () => {
+              setDismissed((current) => new Set([...current, otherId]));
+            },
+            onError: () => {
+              toast({ kind: "error", title: "Couldn't save that.", detail: "Check your connection." });
+            },
+          },
+        );
+      }}
+    />
+  );
+  const deleteButton = (
+    <button
+      type="button"
+      className={styles.deleteReceipt}
+      onClick={() => {
+        setDeleting(true);
+      }}
+    >
+      <Trash2 size={16} aria-hidden /> Delete receipt
+    </button>
   );
   const fields = (
     <fieldset className={styles.fieldset} disabled={!editing}>
@@ -366,8 +425,10 @@ function Review({ latest }: { latest: ReceiptDetail }) {
               {editing && (receipt.store === null || changingStore) && (
                 <section className={styles.storePanel}>{storeChoice}</section>
               )}
+              {duplicateWarnings}
               {fields}
               <div className={styles.actions}>{primary}</div>
+              <div className={styles.deleteRow}>{deleteButton}</div>
             </div>
             {sources.length > 0 && <ImageViewer sources={sources} controls className={styles.photoPane} />}
           </div>
@@ -433,7 +494,11 @@ function Review({ latest }: { latest: ReceiptDetail }) {
                     )}
                   </p>
                 </header>
-                <div className={styles.cardBody}>{fields}</div>
+                <div className={styles.cardBody}>
+                  {duplicateWarnings}
+                  {fields}
+                  <div className={styles.deleteRow}>{deleteButton}</div>
+                </div>
                 <footer className={styles.cardFooter}>{primary}</footer>
               </>
             )}
@@ -442,73 +507,15 @@ function Review({ latest }: { latest: ReceiptDetail }) {
       )}
 
       {questions !== null && (
-        <Modal
-          open
-          size="medium"
-          title="Move these details?"
+        <MoveQuestions
+          questions={questions}
           busy={confirm.isPending}
-          onClose={() => {
+          saveLabel={`${confirmLabel} receipt`}
+          onCancel={() => {
             setQuestions(null);
           }}
-          actions={
-            <>
-              <Button
-                variant="secondary"
-                disabled={confirm.isPending}
-                onClick={() => {
-                  setQuestions(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                busy={confirm.isPending}
-                disabled={questions.some((q) => answers[q.key] === undefined)}
-                onClick={() => {
-                  submit(answers);
-                }}
-              >
-                {confirmLabel} receipt
-              </Button>
-            </>
-          }
-        >
-          <div className={styles.questions}>
-            <p className={styles.muted}>
-              Some details on this receipt are saved for another store. Nothing is moved unless you say so.
-            </p>
-            {questions.map((q) => (
-              <fieldset key={q.key} className={styles.question}>
-                <legend className={styles.questionText}>
-                  The {identifierText(q.identifier)} is saved for {q.about === "item" ? "the item " : ""}
-                  <strong>{q.savedFor.name}</strong>. Move it to <strong>{q.movingTo}</strong>?
-                </legend>
-                <label className={styles.answer}>
-                  <input
-                    type="radio"
-                    name={q.key}
-                    checked={answers[q.key] === true}
-                    onChange={() => {
-                      setAnswers((a) => ({ ...a, [q.key]: true }));
-                    }}
-                  />
-                  Move it to {q.movingTo}
-                </label>
-                <label className={styles.answer}>
-                  <input
-                    type="radio"
-                    name={q.key}
-                    checked={answers[q.key] === false}
-                    onChange={() => {
-                      setAnswers((a) => ({ ...a, [q.key]: false }));
-                    }}
-                  />
-                  Keep it with {q.savedFor.name}
-                </label>
-              </fieldset>
-            ))}
-          </div>
-        </Modal>
+          onSave={submit}
+        />
       )}
 
       <ConfirmModal
@@ -572,6 +579,38 @@ function Review({ latest }: { latest: ReceiptDetail }) {
       >
         Someone else saved it, or the model finished reading it, since you opened it. Reload to see the new
         version; your changes here will be lost.
+      </ConfirmModal>
+
+      <ConfirmModal
+        open={deleting}
+        title="Delete this receipt?"
+        confirmLabel="Delete receipt"
+        destructive
+        busy={remove.isPending}
+        onCancel={() => {
+          setDeleting(false);
+        }}
+        onConfirm={() => {
+          remove.mutate(
+            { id: receipt.id },
+            {
+              onSuccess: () => {
+                setDeleting(false);
+                toast({ kind: "success", title: "Receipt deleted." });
+                done();
+              },
+              onError: () => {
+                toast({
+                  kind: "error",
+                  title: "Couldn't delete the receipt.",
+                  detail: "Check your connection.",
+                });
+              },
+            },
+          );
+        }}
+      >
+        {deleteText(receipt)} What was learned from it, like its store's details, is kept.
       </ConfirmModal>
 
       <ConfirmModal

@@ -86,6 +86,11 @@ const receipts = createReceiptsModule({
       extraction.uploadedListener.receiptUploaded(receiptId);
     },
   },
+  onDeleted: {
+    receiptDeleted: (receiptId) => {
+      extraction.deletedListener.receiptDeleted(receiptId);
+    },
+  },
 });
 
 const extraction = createExtractionModule({

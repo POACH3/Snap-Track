@@ -223,7 +223,11 @@
     background: var(--surface);
   }
 
-  .upload {
+  /* Upload receipt and Add expense, 28px below the sections (docs/DESIGN.md, "Side navigation"). */
+  .sideActions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     margin-top: 28px;
   }
 

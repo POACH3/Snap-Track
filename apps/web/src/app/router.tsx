@@ -7,6 +7,7 @@ import { LibraryScreen } from "../features/library/LibraryScreen.tsx";
 import { StoreScreen } from "../features/library/StoreScreen.tsx";
 import { StoresScreen } from "../features/library/StoresScreen.tsx";
 import { ComingLater } from "../features/placeholders/ComingLater.tsx";
+import { ManualEntryScreen } from "../features/receipts/ManualEntryScreen.tsx";
 import { ReceiptScreen } from "../features/receipts/ReceiptScreen.tsx";
 import { ReceiptsScreen } from "../features/receipts/ReceiptsScreen.tsx";
 import { SettingsScreen } from "../features/settings/SettingsScreen.tsx";
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <ReceiptsScreen /> },
       { path: "capture", element: <CaptureScreen /> },
+      { path: "receipts/new", element: <ManualEntryScreen /> },
       { path: "receipts/:id", element: <ReceiptScreen /> },
       {
         path: "analytics",

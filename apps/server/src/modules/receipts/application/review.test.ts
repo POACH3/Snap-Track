@@ -364,10 +364,10 @@ describe("the receipt as shown", () => {
     });
     const detail = receipt(id);
     expect(detail.warnings).toEqual([]);
-    const result = service.checkDraft(id, { ...detail.draft, totalCents: 2000 });
+    const result = service.checkDraft(id, { ...detail.draft, totalCents: 2000 }, null);
     expect(result).toEqual({
-      ok: true,
-      value: [{ kind: "subtotal-vs-total", expectedCents: 1100, printedCents: 2000 }],
+      warnings: [{ kind: "subtotal-vs-total", expectedCents: 1100, printedCents: 2000 }],
+      duplicates: [],
     });
     expect(receipt(id).draft.totalCents).toBe(1100);
   });

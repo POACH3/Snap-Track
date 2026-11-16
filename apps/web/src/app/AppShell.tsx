@@ -4,6 +4,7 @@ import {
   ChevronDown,
   LibraryBig,
   LogOut,
+  Plus,
   Receipt,
   Settings,
   Upload,
@@ -15,6 +16,7 @@ import { matchPath, NavLink, Outlet, ScrollRestoration, useLocation, useNavigate
 import { useLogout, useSession } from "../features/auth/use-session.ts";
 import { useCapture } from "../features/capture/capture-context.ts";
 import { CAPTURE_PATH, CaptureProvider } from "../features/capture/CaptureProvider.tsx";
+import { MANUAL_PATH } from "../features/receipts/manual-path.ts";
 import { usePhotoInput } from "../features/capture/use-photo-input.tsx";
 import { UploaderProvider } from "../features/sync/uploader.tsx";
 import { Button } from "../shared/ui/Button.tsx";
@@ -68,18 +70,30 @@ function Frame() {
             </li>
           ))}
         </ul>
-        {/* The capture screen has its own upload button; one main button per screen (docs/DESIGN.md). */}
-        {pathname !== CAPTURE_PATH && (
-          <Button
-            fullWidth
-            className={styles.upload}
-            onClick={() => {
-              void navigate(CAPTURE_PATH);
-            }}
-          >
-            <Upload size={18} aria-hidden /> Upload receipt
-          </Button>
-        )}
+        {/* A screen with its own main button hides the same one here (docs/DESIGN.md). */}
+        <div className={styles.sideActions}>
+          {pathname !== CAPTURE_PATH && (
+            <Button
+              fullWidth
+              onClick={() => {
+                void navigate(CAPTURE_PATH);
+              }}
+            >
+              <Upload size={18} aria-hidden /> Upload receipt
+            </Button>
+          )}
+          {pathname !== MANUAL_PATH && (
+            <Button
+              variant="secondary"
+              fullWidth
+              onClick={() => {
+                void navigate(MANUAL_PATH);
+              }}
+            >
+              <Plus size={18} aria-hidden /> Add expense
+            </Button>
+          )}
+        </div>
       </nav>
 
       <main className={onReceiptPage ? `${styles.content} ${styles.fullHeight}` : styles.content}>

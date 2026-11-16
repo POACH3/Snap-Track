@@ -1,12 +1,14 @@
 import type {
   ConfirmReceiptRequest,
   ConsistencyWarning,
+  DuplicateMatch,
   ExtractedReceipt,
   IdentifierAnswer,
   IdentifierQuestion,
   LearningNotice,
   ReceiptDetail,
   ReceiptDraft,
+  PutManualRequest,
   ReceiptSummary,
   StoreChoice,
   StoreRef,
@@ -22,6 +24,7 @@ import {
   type Transaction,
 } from "@snaptrack/core";
 import { checkConsistency } from "../domain/consistency.ts";
+import { findDuplicates, type DuplicateFacts } from "../domain/duplicates.ts";
 import { fromExtraction, hasUsableAmounts } from "../domain/extracted-data.ts";
 import { detectImageFormat } from "../domain/image-format.ts";
 import { receiptImageKeys } from "../domain/image-keys.ts";
@@ -45,6 +48,7 @@ import {
 import type {
   FileStore,
   ImageConverter,
+  ReceiptDeletedListener,
   ReceiptRepository,
   ReceiptStore,
   ReceiptUploadedListener,
@@ -61,6 +65,8 @@ export interface ReceiptsDeps {
   transaction: Transaction;
   /** Told about each new receipt in the transaction that saves it. */
   onUploaded?: ReceiptUploadedListener;
+  /** Told about each deleted receipt in the transaction that deletes it. */
+  onDeleted?: ReceiptDeletedListener;
 }
 
 export interface PutReceiptCommand {
@@ -134,13 +140,47 @@ export function createReceiptsService(deps: ReceiptsDeps) {
     }));
   }
 
-  function warningsFor(record: ReceiptRecord, draft: ReceiptDraft): ConsistencyWarning[] {
+  function warningsFor(
+    record: ReceiptRecord | undefined,
+    draft: ReceiptDraft,
+    now: Date = new Date(),
+  ): ConsistencyWarning[] {
     return checkConsistency(
-      dataFromDraft(draft, record.data.rawText),
+      dataFromDraft(draft, record?.data.rawText ?? null),
       asLineItems(linesFromDraft(draft.lines)),
-      new Date(record.createdAt),
+      record === undefined ? now : new Date(record.createdAt),
     );
   }
+
+  /** The other receipts `facts` looks like, with their summaries, leaving out dismissed pairs. */
+  function duplicatesOf(facts: DuplicateFacts): DuplicateMatch[] {
+    const found = findDuplicates(
+      facts,
+      deps.receipts.duplicateCandidates(facts.storeId, facts.imageHashes),
+      deps.receipts.dismissedWith(facts.id),
+    );
+    const rows = found.flatMap((d) => deps.receipts.findById(d.id) ?? []);
+    const summaries = new Map(toSummaries(rows).map((summary) => [summary.id, summary]));
+    return found.flatMap((d) => {
+      const receipt = summaries.get(d.id);
+      return receipt === undefined ? [] : [{ receipt, kind: d.kind, reason: d.reason, detail: d.detail }];
+    });
+  }
+
+  const factsOf = (
+    id: Id,
+    storeId: Id | null,
+    draft: Pick<ReceiptDraft, "purchasedAt" | "totalCents" | "transactionNumbers" | "payments">,
+    record: ReceiptRecord | undefined,
+  ): DuplicateFacts => ({
+    id,
+    storeId,
+    purchasedAt: draft.purchasedAt,
+    totalCents: draft.totalCents,
+    transactionNumbers: draft.transactionNumbers,
+    payments: draft.payments,
+    imageHashes: record?.images.map((image) => image.imageSha256) ?? [],
+  });
 
   function detailOf(record: ReceiptRecord): ReceiptDetail {
     const [summary] = toSummaries([record]);
@@ -193,6 +233,7 @@ export function createReceiptsService(deps: ReceiptsDeps) {
       confirmedAt: record.confirmedAt,
       confirmedBy,
       warnings: warningsFor(record, draft),
+      duplicates: duplicatesOf(factsOf(record.receipt.id, record.receipt.storeId, draft, record)),
     };
   }
 
@@ -255,6 +296,61 @@ export function createReceiptsService(deps: ReceiptsDeps) {
       if (item !== undefined && line !== undefined) lines[index] = { ...line, itemId: item.id };
     });
     return lines;
+  }
+
+  /**
+   * Saves a review as confirmed and learns from it (SPEC.md §6.5, §6.7), inside the caller's
+   * transaction. Throws `Undo` to leave everything unsaved. `wasConfirmed`: the receipt was
+   * confirmed before, so what it taught is not counted again.
+   */
+  function applyConfirm(
+    record: ReceiptRecord,
+    input: { store: StoreChoice; draft: ReceiptDraft; answers: readonly IdentifierAnswer[] },
+    userId: Id,
+    wasConfirmed: boolean,
+  ): LearningNotice[] {
+    const id = record.receipt.id;
+    const store = resolveStore(input.store);
+    const previous = { storeId: record.receipt.storeId, matchedBy: record.storeMatchedBy };
+    const lines = resolveItems(record, input.draft, store.id);
+    const before = new Map(record.lines.map((line) => [line.id, line.itemId]));
+    const learned = deps.catalog.learnFromConfirmedReceipt({
+      receiptId: id,
+      storeId: store.id,
+      evidence: input.draft.storeEvidence,
+      previous: {
+        ...previous,
+        alreadyCounted: wasConfirmed && previous.storeId === store.id,
+      },
+      lines: lines.flatMap((line) =>
+        line.itemId === null
+          ? []
+          : [
+              {
+                ...line,
+                itemId: line.itemId,
+                alreadyCounted: wasConfirmed && line.id !== undefined && before.get(line.id) === line.itemId,
+              },
+            ],
+      ),
+      answers: input.answers,
+    });
+    if (!learned.ok) throw new Undo(learned.error);
+
+    // Confirming the store that was matched keeps the explanation of how it was matched.
+    const matchedBy = record.storeMatchedBy;
+    const receiptStore: ReceiptStore =
+      previous.storeId === store.id && matchedBy !== null
+        ? { storeId: store.id, matchedBy, match: record.storeMatch }
+        : { storeId: store.id, matchedBy: "user", match: null };
+    deps.receipts.saveReview(id, {
+      data: dataFromDraft(input.draft, record.data.rawText),
+      lines,
+      note: input.draft.note,
+      store: receiptStore,
+      confirmedByUserId: userId,
+    });
+    return learned.value.notices;
   }
 
   /** How many earlier lines with no item would be matched now. */
@@ -394,10 +490,86 @@ export function createReceiptsService(deps: ReceiptsDeps) {
       return record && detailOf(record);
     },
 
-    /** The warnings for a form's current figures. Saves nothing. */
-    checkDraft(id: Id, draft: ReceiptDraft): Result<ConsistencyWarning[], ReceiptNotFound> {
+    /**
+     * The warnings and possible duplicates for a form's current figures, with `storeId` the chosen
+     * store. A receipt not saved yet (a manual entry being typed) is checked as new. Saves nothing.
+     */
+    checkDraft(
+      id: Id,
+      draft: ReceiptDraft,
+      storeId: Id | null,
+    ): { warnings: ConsistencyWarning[]; duplicates: DuplicateMatch[] } {
       const record = deps.receipts.findRecord(id);
-      return record === undefined ? err({ kind: "receipt-not-found" }) : ok(warningsFor(record, draft));
+      return {
+        warnings: warningsFor(record, draft),
+        duplicates: duplicatesOf(factsOf(id, storeId, draft, record)),
+      };
+    },
+
+    /**
+     * Saves an expense with no paper receipt as confirmed, learning from it like a confirm, in one
+     * transaction (SPEC.md §6.6). Idempotent: if `id` exists, nothing changes and it comes back.
+     */
+    putManual(input: PutManualRequest, userId: Id): Result<ConfirmResult, ConfirmError> {
+      const existing = deps.receipts.findRecord(input.id);
+      if (existing !== undefined)
+        return ok({ receipt: detailOf(existing), notices: [], rematchCount: 0, itemRematchCount: 0 });
+      let notices: LearningNotice[];
+      try {
+        notices = deps.transaction.run(() => {
+          const inserted = deps.receipts.insert(
+            {
+              id: input.id,
+              loggedByUserId: userId,
+              source: "manual",
+              status: "confirmed",
+              capturedAt: normalizeTimestamp(input.capturedAt),
+            },
+            [],
+          );
+          const record = deps.receipts.findRecord(input.id);
+          if (!inserted || record === undefined) throw new Error(`Manual entry ${input.id} not saved`);
+          return applyConfirm(record, input, userId, false);
+        });
+      } catch (error) {
+        if (error instanceof Undo) return err(error.error);
+        throw error;
+      }
+      const record = deps.receipts.findRecord(input.id);
+      if (record === undefined) throw new Error(`Manual entry ${input.id} missing right after saving it`);
+      return ok({
+        receipt: detailOf(record),
+        notices,
+        rematchCount: countRematchable(),
+        itemRematchCount: countItemRematchable(),
+      });
+    },
+
+    /** "Not a duplicate": the pair is never flagged again (SPEC.md §6.5). */
+    dismissDuplicate(id: Id, otherId: Id, userId: Id): Result<ReceiptDetail, ReceiptNotFound> {
+      return deps.transaction.run(() => {
+        if (deps.receipts.findById(id) === undefined || deps.receipts.findById(otherId) === undefined)
+          return err({ kind: "receipt-not-found" as const });
+        deps.receipts.dismissDuplicate(id, otherId, userId);
+        const record = deps.receipts.findRecord(id);
+        return record === undefined ? err({ kind: "receipt-not-found" as const }) : ok(detailOf(record));
+      });
+    },
+
+    /**
+     * Deletes a receipt, its lines, photos and anything other modules keep for it, in one
+     * transaction; then its files. What was learned from it stays (SPEC.md §6.5). A file left
+     * behind by a crash between the two is harmless.
+     */
+    async deleteReceipt(id: Id): Promise<Result<void, ReceiptNotFound>> {
+      const keys = deps.transaction.run(() => {
+        const found = deps.receipts.delete(id);
+        if (found !== undefined) deps.onDeleted?.receiptDeleted(id);
+        return found;
+      });
+      if (keys === undefined) return err({ kind: "receipt-not-found" });
+      await deleteFiles(keys);
+      return ok(undefined);
     },
 
     /**
@@ -416,50 +588,7 @@ export function createReceiptsService(deps: ReceiptsDeps) {
           const record = deps.receipts.findRecord(input.id);
           if (record === undefined) throw new Undo({ kind: "receipt-not-found" });
           if (record.updatedAt !== input.expectedUpdatedAt) throw new Undo({ kind: "receipt-changed" });
-
-          const store = resolveStore(input.store);
-          const previous = { storeId: record.receipt.storeId, matchedBy: record.storeMatchedBy };
-          const lines = resolveItems(record, input.draft, store.id);
-          const wasConfirmed = record.receipt.status === "confirmed";
-          const before = new Map(record.lines.map((line) => [line.id, line.itemId]));
-          const learned = deps.catalog.learnFromConfirmedReceipt({
-            receiptId: input.id,
-            storeId: store.id,
-            evidence: input.draft.storeEvidence,
-            previous: {
-              ...previous,
-              alreadyCounted: wasConfirmed && previous.storeId === store.id,
-            },
-            lines: lines.flatMap((line) =>
-              line.itemId === null
-                ? []
-                : [
-                    {
-                      ...line,
-                      itemId: line.itemId,
-                      alreadyCounted:
-                        wasConfirmed && line.id !== undefined && before.get(line.id) === line.itemId,
-                    },
-                  ],
-            ),
-            answers: input.answers,
-          });
-          if (!learned.ok) throw new Undo(learned.error);
-
-          // Confirming the store that was matched keeps the explanation of how it was matched.
-          const matchedBy = record.storeMatchedBy;
-          const receiptStore: ReceiptStore =
-            previous.storeId === store.id && matchedBy !== null
-              ? { storeId: store.id, matchedBy, match: record.storeMatch }
-              : { storeId: store.id, matchedBy: "user", match: null };
-          deps.receipts.saveReview(input.id, {
-            data: dataFromDraft(input.draft, record.data.rawText),
-            lines,
-            note: input.draft.note,
-            store: receiptStore,
-            confirmedByUserId: userId,
-          });
-          return learned.value.notices;
+          return applyConfirm(record, input, userId, record.receipt.status === "confirmed");
         });
       } catch (error) {
         if (error instanceof Undo) return err(error.error);

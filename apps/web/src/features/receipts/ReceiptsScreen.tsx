@@ -1,5 +1,5 @@
 import type { ReceiptSummary } from "@snaptrack/contracts";
-import { Camera, RotateCw } from "lucide-react";
+import { Camera, Plus, RotateCw } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Button } from "../../shared/ui/Button.tsx";
@@ -10,6 +10,7 @@ import type { QueueEntry } from "../sync/upload-queue.ts";
 import { useUploader } from "../sync/uploader-context.ts";
 import { DigitalReceipt } from "./DigitalReceipt.tsx";
 import { dayBlock, formatTotal } from "./receipt-format.ts";
+import { MANUAL_PATH } from "./manual-path.ts";
 import styles from "./ReceiptsScreen.module.css";
 import { StatusIcon } from "./StatusIcon.tsx";
 import { useReceiptCounts, useReceiptList, type ReviewFilter } from "./use-receipts.ts";
@@ -36,7 +37,13 @@ export function ReceiptsScreen() {
 
   return (
     <div className={styles.screen}>
-      <h1>Receipts</h1>
+      <div className={styles.head}>
+        <h1>Receipts</h1>
+        {/* On the phone only; wider screens have it in the side navigation (docs/DESIGN.md). */}
+        <Link to={MANUAL_PATH} className={styles.addExpense}>
+          <Plus size={18} aria-hidden /> Add expense
+        </Link>
+      </div>
 
       <div role="group" aria-label="Show" className={styles.chips}>
         {chips.map((chip) => (
@@ -167,7 +174,10 @@ function Row({
           {day.day}
         </span>
       </span>
-      <span className={store.known ? styles.store : `${styles.store} ${styles.unknown}`}>{store.text}</span>
+      <span className={styles.storeBlock}>
+        <span className={store.known ? styles.store : `${styles.store} ${styles.unknown}`}>{store.text}</span>
+        {receipt.source === "manual" && <span className={styles.source}>Manual</span>}
+      </span>
       <span className={styles.end}>
         {!reading && <span className={styles.amount}>{formatTotal(receipt.totalCents)}</span>}
         <StatusIcon status={receipt.status} />

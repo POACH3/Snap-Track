@@ -29,10 +29,36 @@ export function createReceiptsRouter(service: ReceiptsService) {
       return { receipt };
     }),
 
-    checkDraft: os.receipts.checkDraft.handler(({ input, errors }) => {
-      const result = service.checkDraft(input.id, input.draft);
+    checkDraft: os.receipts.checkDraft.handler(({ input }) =>
+      service.checkDraft(input.id, input.draft, input.storeId),
+    ),
+
+    putManual: os.receipts.putManual.handler(({ input, context, errors }) => {
+      const result = service.putManual(input, signedInUser(context).id);
+      if (result.ok) return result.value;
+      switch (result.error.kind) {
+        case "store-not-found":
+          throw errors.STORE_NOT_FOUND();
+        case "name-taken":
+          throw errors.STORE_NAME_TAKEN();
+        case "needs-answers":
+          throw errors.NEEDS_ANSWERS({ data: { questions: result.error.questions } });
+        case "receipt-not-found":
+        case "receipt-changed":
+          throw new Error(`Unexpected ${result.error.kind} for a manual entry`);
+      }
+    }),
+
+    dismissDuplicate: os.receipts.dismissDuplicate.handler(({ input, context, errors }) => {
+      const result = service.dismissDuplicate(input.id, input.otherId, signedInUser(context).id);
       if (!result.ok) throw errors.RECEIPT_NOT_FOUND();
-      return { warnings: result.value };
+      return { receipt: result.value };
+    }),
+
+    delete: os.receipts.delete.handler(async ({ input, errors }) => {
+      const result = await service.deleteReceipt(input.id);
+      if (!result.ok) throw errors.RECEIPT_NOT_FOUND();
+      return {};
     }),
 
     confirm: os.receipts.confirm.handler(({ input, context, errors }) => {

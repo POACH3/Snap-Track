@@ -67,6 +67,11 @@ export function createTestApp(options: TestAppOptions = {}) {
         extraction.uploadedListener.receiptUploaded(receiptId);
       },
     },
+    onDeleted: {
+      receiptDeleted: (receiptId) => {
+        extraction.deletedListener.receiptDeleted(receiptId);
+      },
+    },
   });
   const extraction = createExtractionModule({
     db,

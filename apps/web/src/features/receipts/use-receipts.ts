@@ -67,13 +67,43 @@ export function useRematch() {
   return useMutation(api.receipts.rematch.mutationOptions({ onSuccess: invalidate }));
 }
 
+export function usePutManual() {
+  const invalidate = useInvalidateReceipts();
+  return useMutation(api.receipts.putManual.mutationOptions({ onSuccess: invalidate }));
+}
+
+export function useDismissDuplicate() {
+  const invalidate = useInvalidateReceipts();
+  return useMutation(api.receipts.dismissDuplicate.mutationOptions({ onSuccess: invalidate }));
+}
+
+export function useDeleteReceipt() {
+  const queryClient = useQueryClient();
+  return useMutation(
+    api.receipts.delete.mutationOptions({
+      onSuccess: async (_, { id }) => {
+        // The deleted receipt's own query would only fail now; drop it before refreshing the rest.
+        queryClient.removeQueries({ queryKey: api.receipts.get.queryKey({ input: { id } }) });
+        await queryClient.invalidateQueries({ queryKey: api.receipts.key() });
+      },
+    }),
+  );
+}
+
+export type DraftCheck = Awaited<ReturnType<typeof client.receipts.checkDraft>>;
+
 /**
- * The server's consistency warnings for the form's current figures (SPEC.md §6.3 step 4),
- * asked for once typing pauses. Undefined until the first answer; stale answers are dropped.
+ * The server's consistency warnings and possible duplicates for the form's current figures
+ * (SPEC.md §6.3 step 4, §6.5), asked for once typing pauses. `storeId` is the chosen store when
+ * it exists. Undefined until the first answer; stale answers are dropped.
  */
-export function useDraftWarnings(id: string, draft: ReceiptDraft | undefined, enabled: boolean) {
-  const [warnings, setWarnings] =
-    useState<Awaited<ReturnType<typeof client.receipts.checkDraft>>["warnings"]>();
+export function useDraftCheck(
+  id: string,
+  draft: ReceiptDraft | undefined,
+  storeId: string | null,
+  enabled: boolean,
+) {
+  const [check, setCheck] = useState<DraftCheck>();
   const key = draft === undefined ? undefined : JSON.stringify(draft);
 
   useEffect(() => {
@@ -81,9 +111,9 @@ export function useDraftWarnings(id: string, draft: ReceiptDraft | undefined, en
     let current = true;
     const timer = setTimeout(() => {
       client.receipts
-        .checkDraft({ id, draft })
+        .checkDraft({ id, draft, storeId })
         .then((result) => {
-          if (current) setWarnings(result.warnings);
+          if (current) setCheck(result);
         })
         // Warnings help but never block; a failed check keeps the last ones shown.
         .catch(() => undefined);
@@ -94,7 +124,7 @@ export function useDraftWarnings(id: string, draft: ReceiptDraft | undefined, en
     };
     // `key` stands for `draft`: a new object with the same contents shouldn't ask again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, key, enabled]);
+  }, [id, key, storeId, enabled]);
 
-  return warnings;
+  return check;
 }

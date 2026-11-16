@@ -197,6 +197,20 @@ export const ConsistencyWarning = z.discriminatedUnion("kind", [
 ]);
 export type ConsistencyWarning = z.infer<typeof ConsistencyWarning>;
 
+/**
+ * Another receipt this one may be the same purchase as (SPEC.md §6.5). `definite`: a transaction
+ * number, or an approval code with the card's last four, matches at the same store, or it is
+ * the same photo; `possible`: same store, date, time (when both print one) and total.
+ */
+export const DuplicateMatch = z.object({
+  receipt: ReceiptSummary,
+  kind: z.enum(["definite", "possible"]),
+  reason: z.enum(["transaction_number", "approval_code", "same_photo", "same_details"]),
+  /** What matched, as printed: the transaction number, or the approval code. */
+  detail: z.string().nullable(),
+});
+export type DuplicateMatch = z.infer<typeof DuplicateMatch>;
+
 /** Everything about one receipt, for the receipt page and the digital receipt. */
 export const ReceiptDetail = ReceiptSummary.extend({
   /** Sent back with `confirm`, which refuses if the receipt changed since. */
@@ -230,6 +244,8 @@ export const ReceiptDetail = ReceiptSummary.extend({
   confirmedAt: z.iso.datetime().nullable(),
   confirmedBy: z.object({ id: z.uuid(), displayName: z.string() }).nullable(),
   warnings: z.array(ConsistencyWarning),
+  /** Worked out now; pairs a person said are not duplicates are left out. */
+  duplicates: z.array(DuplicateMatch),
 });
 export type ReceiptDetail = z.infer<typeof ReceiptDetail>;
 
@@ -256,6 +272,24 @@ export const ConfirmReceiptInput = z.object({
 export type ConfirmReceiptInput = z.input<typeof ConfirmReceiptInput>;
 /** A confirm as the server receives it, after validation and defaults. */
 export type ConfirmReceiptRequest = z.output<typeof ConfirmReceiptInput>;
+
+/**
+ * An expense with no paper receipt (SPEC.md §6.6), saved as confirmed. Idempotent by `id`, made
+ * in the browser like a photo's, so a retried save is one entry.
+ */
+export const PutManualInput = z.object({
+  id: z.uuid(),
+  /** When it was entered on the device; the receipts list is ordered by it. */
+  capturedAt: z.iso.datetime(),
+  store: StoreChoice,
+  draft: ReceiptDraft.refine((draft) => draft.totalCents !== null, {
+    message: "A total is required.",
+    path: ["totalCents"],
+  }),
+  answers: z.array(IdentifierAnswer).max(50).default([]),
+});
+export type PutManualInput = z.input<typeof PutManualInput>;
+export type PutManualRequest = z.output<typeof PutManualInput>;
 
 export const PutReceiptInput = z.object({
   /** Made on the phone at capture time, so a retried upload is the same receipt (SPEC.md §5). */
@@ -302,11 +336,14 @@ export const receiptsContract = {
     .input(z.object({ id: z.uuid() }))
     .output(z.object({ receipt: ReceiptDetail }))
     .errors({ RECEIPT_NOT_FOUND }),
-  /** The consistency warnings for a form's current figures, while the user edits. Saves nothing. */
+  /**
+   * The consistency warnings and possible duplicates for a form's current figures, while the user
+   * edits. Saves nothing. `storeId` is the chosen store, when it exists. A receipt not saved yet
+   * (a manual entry being typed) is checked as new.
+   */
   checkDraft: procedure
-    .input(z.object({ id: z.uuid(), draft: ReceiptDraft }))
-    .output(z.object({ warnings: z.array(ConsistencyWarning) }))
-    .errors({ RECEIPT_NOT_FOUND }),
+    .input(z.object({ id: z.uuid(), draft: ReceiptDraft, storeId: z.uuid().nullable().default(null) }))
+    .output(z.object({ warnings: z.array(ConsistencyWarning), duplicates: z.array(DuplicateMatch) })),
   /**
    * Save the review and mark the receipt confirmed (also used to save an edit of a confirmed
    * receipt), then learn its store's identifiers (SPEC.md §6.7). If learning would move an
@@ -331,6 +368,36 @@ export const receiptsContract = {
       RECEIPT_CHANGED: { status: 409, message: "This receipt changed since it was opened. Reload it." },
       NEEDS_ANSWERS: NEEDS_ANSWERS_ERROR,
     }),
+  /** Save a manual entry (SPEC.md §6.6): confirmed at once, learned from like a confirm. */
+  putManual: procedure
+    .route({ method: "PUT" })
+    .input(PutManualInput)
+    .output(
+      z.object({
+        receipt: ReceiptDetail,
+        notices: z.array(LearningNotice),
+        rematchCount: z.number().int().min(0),
+        itemRematchCount: z.number().int().min(0),
+      }),
+    )
+    .errors({
+      STORE_NOT_FOUND: { status: 404, message: "No such store." },
+      STORE_NAME_TAKEN: { status: 409, message: "Another store already has that name." },
+      NEEDS_ANSWERS: NEEDS_ANSWERS_ERROR,
+    }),
+  /** "Not a duplicate": the pair is never flagged again, for anyone. */
+  dismissDuplicate: procedure
+    .input(z.object({ id: z.uuid(), otherId: z.uuid() }))
+    .output(z.object({ receipt: ReceiptDetail }))
+    .errors({ RECEIPT_NOT_FOUND }),
+  /**
+   * Deletes a receipt with its lines, photos and extraction job. What a person confirmed from it
+   * (store and item identifiers) stays learned.
+   */
+  delete: procedure
+    .input(z.object({ id: z.uuid() }))
+    .output(z.object({}))
+    .errors({ RECEIPT_NOT_FOUND }),
   /** How many receipts are waiting for a person, for the list's filter. */
   counts: procedure
     .route({ method: "GET" })

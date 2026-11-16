@@ -120,4 +120,8 @@ export class SqliteJobRepository implements ExtractionJobRepository {
     const row = this.#db.select().from(extractionJobs).where(eq(extractionJobs.receiptId, receiptId)).get();
     return row && { ...toJob(row), lastError: row.lastError, rawOutput: row.rawOutput };
   }
+
+  deleteForReceipt(receiptId: Id): void {
+    this.#db.delete(extractionJobs).where(eq(extractionJobs.receiptId, receiptId)).run();
+  }
 }

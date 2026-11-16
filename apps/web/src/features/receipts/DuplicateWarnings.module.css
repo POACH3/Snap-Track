@@ -1,0 +1,89 @@
+/* The duplicate warning (docs/DESIGN.md, "Duplicate warning"). */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* Room before the fields when it sits at the top of a card's body. */
+  margin-bottom: 16px;
+}
+
+.warning {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-control);
+  background: var(--warning-tint);
+}
+
+.text {
+  display: flex;
+  gap: 8px;
+}
+
+.icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--warning);
+}
+
+.title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.body {
+  margin: 2px 0;
+  font-size: 13px;
+  color: var(--text-body);
+}
+
+.link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-text);
+  text-decoration: none;
+}
+
+.link:hover {
+  color: var(--text-heading);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.delete,
+.dismiss {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.delete {
+  border: 1px solid var(--danger-border);
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.dismiss {
+  border: 0;
+  background: none;
+  color: var(--text-body);
+}
+
+.dismiss:hover {
+  background: var(--surface-raised);
+}

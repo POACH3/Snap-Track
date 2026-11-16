@@ -16,6 +16,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { pairKey, type DuplicateFacts } from "../domain/duplicates.ts";
 import type { ExtractionResult, LineItem } from "../domain/extracted-data.ts";
 import type { ListPosition } from "../domain/list-cursor.ts";
 import type {
@@ -30,7 +31,7 @@ import type {
 } from "../domain/receipt.ts";
 import { EMPTY_EVIDENCE } from "../domain/review.ts";
 import type { ItemPurchase, ReceiptRepository, ReceiptStore, Review } from "../ports.ts";
-import { lineItems, lineItemTags, receiptImages, receipts } from "./schema.ts";
+import { duplicateDismissals, lineItems, lineItemTags, receiptImages, receipts } from "./schema.ts";
 
 type Db = BetterSQLite3Database;
 type ReceiptRow = typeof receipts.$inferSelect;
@@ -470,5 +471,95 @@ export class SqliteReceiptRepository implements ReceiptRepository {
       receipt: toReceipt(row, total),
       images: (byReceipt.get(row.id) ?? []).map(toImage),
     }));
+  }
+
+  duplicateCandidates(storeId: Id | null, hashes: readonly string[]): DuplicateFacts[] {
+    const byHash =
+      hashes.length === 0
+        ? []
+        : this.#db
+            .selectDistinct({ id: receiptImages.receiptId })
+            .from(receiptImages)
+            .where(inArray(receiptImages.imageSha256, [...hashes]))
+            .all()
+            .map((row) => row.id);
+    const where =
+      storeId === null
+        ? byHash.length === 0
+          ? undefined
+          : inArray(receipts.id, byHash)
+        : byHash.length === 0
+          ? eq(receipts.storeId, storeId)
+          : or(eq(receipts.storeId, storeId), inArray(receipts.id, byHash));
+    if (where === undefined) return [];
+    const rows = this.#db
+      .select({
+        id: receipts.id,
+        storeId: receipts.storeId,
+        purchasedAt: receipts.purchasedAt,
+        totalCents: receipts.totalCents,
+        transactionNumbers: receipts.transactionNumbers,
+        payments: receipts.payments,
+      })
+      .from(receipts)
+      .where(where)
+      .all();
+    if (rows.length === 0) return [];
+    const images = this.#db
+      .select({ receiptId: receiptImages.receiptId, hash: receiptImages.imageSha256 })
+      .from(receiptImages)
+      .where(
+        inArray(
+          receiptImages.receiptId,
+          rows.map((row) => row.id),
+        ),
+      )
+      .all();
+    const hashesOf = new Map<Id, string[]>();
+    for (const { receiptId, hash } of images)
+      hashesOf.set(receiptId, [...(hashesOf.get(receiptId) ?? []), hash]);
+    return rows.map((row) => ({
+      ...row,
+      transactionNumbers: row.transactionNumbers ?? [],
+      payments: row.payments ?? [],
+      imageHashes: hashesOf.get(row.id) ?? [],
+    }));
+  }
+
+  dismissedWith(id: Id): Set<Id> {
+    const rows = this.#db
+      .select({ a: duplicateDismissals.receiptId, b: duplicateDismissals.otherReceiptId })
+      .from(duplicateDismissals)
+      .where(or(eq(duplicateDismissals.receiptId, id), eq(duplicateDismissals.otherReceiptId, id)))
+      .all();
+    return new Set(rows.map(({ a, b }) => (a === id ? b : a)));
+  }
+
+  dismissDuplicate(id: Id, otherId: Id, userId: Id): void {
+    const [receiptId, otherReceiptId] = pairKey(id, otherId);
+    this.#db
+      .insert(duplicateDismissals)
+      .values({
+        receiptId,
+        otherReceiptId,
+        dismissedByUserId: userId,
+        dismissedAt: this.#clock.now().toISOString(),
+      })
+      .onConflictDoNothing()
+      .run();
+  }
+
+  delete(id: Id): string[] | undefined {
+    const images = this.#db
+      .select({ image: receiptImages.imageKey, thumbnail: receiptImages.thumbnailKey })
+      .from(receiptImages)
+      .where(eq(receiptImages.receiptId, id))
+      .all();
+    // Lines, their tags, images and dismissals go with it (each references the receipt, on delete cascade).
+    const result = this.#db.delete(receipts).where(eq(receipts.id, id)).run();
+    if (result.changes === 0) return undefined;
+    return images.flatMap(({ image, thumbnail }) =>
+      [image, thumbnail].filter((key): key is string => key !== null),
+    );
   }
 }

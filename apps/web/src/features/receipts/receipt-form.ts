@@ -398,3 +398,54 @@ export function warningText(warning: ConsistencyWarning): string {
       return "This date is more than two years before the photo was uploaded.";
   }
 }
+
+/** A form with nothing in it, dated `date` (`YYYY-MM-DD`): where a manual entry starts (SPEC.md §6.6). */
+export function emptyForm(date: string): FormState {
+  return {
+    date,
+    time: "",
+    subtotal: "",
+    discount: "",
+    tax: "",
+    tip: "",
+    total: "",
+    printedSavings: "",
+    printedItemCount: "",
+    taxLines: [],
+    payments: [],
+    transactionNumbers: [],
+    evidence: {
+      printedName: "",
+      logoText: "",
+      legalName: "",
+      branchName: "",
+      storeNumber: "",
+      street: "",
+      city: "",
+      state: "",
+      zip: "",
+      merchantId: "",
+      brandGuess: null,
+      phones: [],
+      websites: [],
+      emails: [],
+    },
+    note: "",
+    lines: [],
+  };
+}
+
+/**
+ * A quick entry as a form to send (SPEC.md §6.6): its date, time, total and note, and one line for
+ * the whole amount, in `categoryId` for this purchase when one is chosen. Anything else typed in
+ * the full form is left out.
+ */
+export function quickEntryForm(form: FormState, categoryId: string | null): FormState {
+  return {
+    ...emptyForm(form.date),
+    time: form.time,
+    total: form.total,
+    note: form.note,
+    lines: [{ ...blankLine(), lineTotal: form.total, categoryId }],
+  };
+}

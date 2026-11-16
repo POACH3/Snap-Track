@@ -48,13 +48,23 @@ interface StoreChoiceProps {
   value: ChosenStore;
   onChange: (value: ChosenStore) => void;
   error?: string | undefined;
+  /** Replaces the question above the choices; null for none. */
+  prompt?: string | null | undefined;
 }
 
 /**
  * Store needs confirmation (SPEC.md §6.5): suggested stores with why each is suggested, then a
  * search of known stores that can also create a new one. Nothing is saved until Confirm.
  */
-export function StoreChoice({ printed, suggestions, detected, value, onChange, error }: StoreChoiceProps) {
+export function StoreChoice({
+  printed,
+  suggestions,
+  detected,
+  value,
+  onChange,
+  error,
+  prompt,
+}: StoreChoiceProps) {
   const [query, setQuery] = useState("");
   const search = useStoreSearch(query);
   const inputId = useId();
@@ -108,15 +118,19 @@ export function StoreChoice({ printed, suggestions, detected, value, onChange, e
 
   return (
     <div className={styles.choice}>
-      <p className={styles.prompt}>
-        {printed === null ? (
-          "Which store is this receipt from?"
-        ) : (
-          <>
-            The receipt says <strong>{printed}</strong>. Which store is it?
-          </>
-        )}
-      </p>
+      {prompt !== null && (
+        <p className={styles.prompt}>
+          {prompt !== undefined ? (
+            prompt
+          ) : printed === null ? (
+            "Which store is this receipt from?"
+          ) : (
+            <>
+              The receipt says <strong>{printed}</strong>. Which store is it?
+            </>
+          )}
+        </p>
+      )}
       {(suggestions.length > 0 || offerDetected) && (
         <ul className={styles.options} aria-label="Suggested stores">
           {suggestions.map((s) => option(s.store, reason(s)))}

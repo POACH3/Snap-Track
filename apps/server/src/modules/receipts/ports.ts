@@ -15,6 +15,7 @@ import type {
   StoreSuggestion,
 } from "@snaptrack/contracts";
 import type { Id, PixelSize, Result } from "@snaptrack/core";
+import type { DuplicateFacts } from "./domain/duplicates.ts";
 import type { ExtractionResult, ReceiptData } from "./domain/extracted-data.ts";
 import type { ListPosition } from "./domain/list-cursor.ts";
 import type {
@@ -93,6 +94,13 @@ export interface ReceiptRepository {
   setLineItem(lineId: Id, itemId: Id): boolean;
   /** An item's latest purchases, newest first. */
   itemPurchases(itemId: Id, limit: number): ItemPurchase[];
+  /** Receipts of `storeId`, and any with one of these photos: what a receipt may duplicate. */
+  duplicateCandidates(storeId: Id | null, hashes: readonly string[]): DuplicateFacts[];
+  /** The receipts a person said `id` is not a duplicate of. */
+  dismissedWith(id: Id): Set<Id>;
+  dismissDuplicate(id: Id, otherId: Id, userId: Id): void;
+  /** Deletes the receipt and everything of it; returns its file keys, or undefined if there was none. */
+  delete(id: Id): string[] | undefined;
 }
 
 export interface ItemPurchase {
@@ -161,6 +169,14 @@ export interface Catalog {
  */
 export interface ReceiptUploadedListener {
   receiptUploaded(receiptId: Id): void;
+}
+
+/**
+ * Told about each deleted receipt inside the transaction that deletes it, so other modules
+ * remove what they keep for it (an extraction job). Wired by the composition root.
+ */
+export interface ReceiptDeletedListener {
+  receiptDeleted(receiptId: Id): void;
 }
 
 /**

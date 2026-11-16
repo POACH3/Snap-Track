@@ -40,5 +40,11 @@ export function createExtractionModule(options: ExtractionModuleOptions) {
         worker.wake();
       },
     },
+    /** For the receipts module: a deleted receipt's job is deleted in the same transaction. */
+    deletedListener: {
+      receiptDeleted(receiptId: Id): void {
+        jobs.deleteForReceipt(receiptId);
+      },
+    },
   };
 }

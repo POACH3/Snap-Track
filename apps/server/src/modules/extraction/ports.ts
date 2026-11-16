@@ -50,6 +50,8 @@ export interface ExtractionJobRepository {
   findByReceipt(
     receiptId: Id,
   ): (ExtractionJob & { lastError: string | null; rawOutput: string | null }) | undefined;
+  /** The receipt was deleted; its job goes too. */
+  deleteForReceipt(receiptId: Id): void;
 }
 
 /** What extraction needs from `receipts`, supplied by the composition root from the receipts module. */

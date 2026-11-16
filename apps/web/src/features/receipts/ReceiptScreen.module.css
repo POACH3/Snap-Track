@@ -270,3 +270,29 @@
     padding: calc(24px + env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 24px 24px;
   }
 }
+
+/* Delete receipt: danger text, no fill, at the bottom of the form (docs/DESIGN.md, "Action buttons"). */
+.deleteRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.deleteReceipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--danger);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.deleteReceipt:hover {
+  background: var(--danger-tint);
+}

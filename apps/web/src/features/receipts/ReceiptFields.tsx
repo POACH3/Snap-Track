@@ -39,6 +39,8 @@ interface FieldsProps {
   /** The chosen store, when it already exists: its default category applies to the lines. */
   store: KnownStore;
   editing: boolean;
+  /** A manual entry: nothing was printed, so the store details and transcription are left out. */
+  manual?: boolean;
 }
 
 // ---------- small building blocks ----------
@@ -155,6 +157,7 @@ export function ReceiptFields({
   rawText,
   store,
   editing,
+  manual = false,
 }: FieldsProps) {
   const [optionsFor, setOptionsFor] = useState<string | null>(null);
   const labels = useLabelContext(form, store);
@@ -356,14 +359,16 @@ export function ReceiptFields({
             />
           </Section>
           <MoreDetails form={form} update={update} errors={errors} warnings={warnings} />
-          <StoreDetails form={form} update={update} />
-          <Section title="Transcription">
-            {rawText === null ? (
-              <p className={styles.muted}>Nothing was transcribed.</p>
-            ) : (
-              <pre className={styles.transcription}>{rawText}</pre>
-            )}
-          </Section>
+          {!manual && <StoreDetails form={form} update={update} />}
+          {!manual && (
+            <Section title="Transcription">
+              {rawText === null ? (
+                <p className={styles.muted}>Nothing was transcribed.</p>
+              ) : (
+                <pre className={styles.transcription}>{rawText}</pre>
+              )}
+            </Section>
+          )}
         </div>
       </div>
 

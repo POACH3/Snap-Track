@@ -138,3 +138,26 @@ export const lineItemTags = sqliteTable(
     index("line_item_tags_tag_idx").on(table.tagId),
   ],
 );
+
+/**
+ * Pairs a person said are not duplicates (SPEC.md §6.5), the smaller id first so one row covers
+ * the pair either way round. Deleted with either receipt.
+ */
+export const duplicateDismissals = sqliteTable(
+  "duplicate_dismissals",
+  {
+    receiptId: text("receipt_id")
+      .notNull()
+      .references(() => receipts.id, { onDelete: "cascade" }),
+    otherReceiptId: text("other_receipt_id")
+      .notNull()
+      .references(() => receipts.id, { onDelete: "cascade" }),
+    /** A `users` id. */
+    dismissedByUserId: text("dismissed_by_user_id").notNull(),
+    dismissedAt: text("dismissed_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.receiptId, table.otherReceiptId] }),
+    index("duplicate_dismissals_other_idx").on(table.otherReceiptId),
+  ],
+);

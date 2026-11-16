@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   blankLine,
   draftFromForm,
+  emptyForm,
   formFromDraft,
   moneyText,
   parseMoney,
   parseQuantity,
   quantityText,
+  quickEntryForm,
   splitOf,
   warningField,
 } from "./receipt-form.ts";
@@ -181,5 +183,32 @@ describe("the form and the draft", () => {
     expect(warningField({ kind: "lines-vs-subtotal", expectedCents: 1, printedCents: 2 }, form.lines)).toBe(
       "subtotal",
     );
+  });
+});
+
+describe("a quick entry", () => {
+  it("is one line for the whole amount, in the chosen category, with nothing else typed", () => {
+    const form = { ...emptyForm("2026-11-16"), total: "12.50", note: "Lunch", tax: "1.00" };
+    const result = draftFromForm(quickEntryForm(form, "00000000-0000-4000-8000-0000000000cc"));
+    expect("draft" in result && result.draft).toMatchObject({
+      purchasedAt: "2026-11-16",
+      totalCents: 1250,
+      taxCents: null,
+      note: "Lunch",
+      lines: [
+        {
+          kind: "item",
+          rawName: null,
+          lineTotalCents: 1250,
+          quantityMilli: 1000,
+          categoryId: "00000000-0000-4000-8000-0000000000cc",
+        },
+      ],
+    });
+  });
+
+  it("names a total that isn't an amount", () => {
+    const result = draftFromForm(quickEntryForm({ ...emptyForm("2026-11-16"), total: "twelve" }, null));
+    expect("errors" in result && result.errors["total"]).toBe("Enter an amount, like 4.99.");
   });
 });

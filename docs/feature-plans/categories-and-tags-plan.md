@@ -1,7 +1,7 @@
 # Stage 4, part 3: categories and tags
 
 **Changes SPEC.md:** §5 Data Model (`categories`, `tags`, `item_tags`, `line_item_tags`, suggestion outcomes, removing entries), §6.3 Extraction (category and tag suggestions in the prompt), §6.5 Review (category and tags on lines), §11 Stage 4.  
-**Status:** active (built 2026-11-16 on branch `stage-4-labels`; mock approved; the real-receipt check is pending).
+**Status:** shipped (2026-11-16, merged; the by-hand check of a real receipt's suggestions is still pending).
 
 Part 3 of the five Stage 4 plans (parts 1 and 2 shipped). Builds the
 four-level hierarchy (categories and classes) with the default L1 set, the
