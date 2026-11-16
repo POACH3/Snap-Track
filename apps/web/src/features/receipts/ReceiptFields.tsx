@@ -179,8 +179,10 @@ export function ReceiptFields({ form, update, errors, warnings, wide, rawText }:
           const key = line.key;
           const field = (name: string) => `lines.${key}.${name}`;
           return (
-            <div key={key} className={wide ? styles.tableRow : styles.lineRow}>
-              <div className={styles.nameCell}>
+            // The item's name sits above the whole row, so the printed text lines up with the price.
+            <div key={key} className={styles.lineBlock}>
+              {/* An item's name goes above the printed text; an offer for a line with none, below it. */}
+              {line.item !== null && (
                 <ItemLabel
                   line={line}
                   onOpen={() => {
@@ -190,61 +192,75 @@ export function ReceiptFields({ form, update, errors, warnings, wide, rawText }:
                     setLine(key, { item });
                   }}
                 />
+              )}
+              <div className={wide ? styles.tableRow : styles.lineRow}>
                 <Input
                   label="Printed name"
                   showLabel={false}
+                  className={styles.nameField}
                   value={line.rawName}
                   onChange={(rawName) => {
                     setLine(key, { rawName });
                   }}
                 />
+                {wide && (
+                  <>
+                    <Input
+                      label="Quantity"
+                      showLabel={false}
+                      amount
+                      value={line.quantity}
+                      error={errors[field("quantity")]}
+                      onChange={(quantity) => {
+                        setLine(key, { quantity });
+                      }}
+                    />
+                    <Input
+                      label="Unit price"
+                      showLabel={false}
+                      amount
+                      value={line.unitPrice}
+                      error={errors[field("unitPrice")]}
+                      onChange={(unitPrice) => {
+                        setLine(key, { unitPrice });
+                      }}
+                    />
+                  </>
+                )}
+                <Input
+                  label="Amount charged"
+                  showLabel={false}
+                  amount
+                  className={wide ? undefined : styles.lineAmount}
+                  value={line.lineTotal}
+                  error={errors[field("lineTotal")]}
+                  warnings={warnings.get(field("lineTotal"))}
+                  onChange={(lineTotal) => {
+                    setLine(key, { lineTotal });
+                  }}
+                />
+                <button
+                  type="button"
+                  className={styles.iconButton}
+                  aria-label={`Line options for ${line.rawName === "" ? "this line" : line.rawName}: details, split, remove`}
+                  onClick={() => {
+                    setOptionsFor(key);
+                  }}
+                >
+                  <Ellipsis size={18} aria-hidden />
+                </button>
               </div>
-              {wide && (
-                <>
-                  <Input
-                    label="Quantity"
-                    showLabel={false}
-                    amount
-                    value={line.quantity}
-                    error={errors[field("quantity")]}
-                    onChange={(quantity) => {
-                      setLine(key, { quantity });
-                    }}
-                  />
-                  <Input
-                    label="Unit price"
-                    showLabel={false}
-                    amount
-                    value={line.unitPrice}
-                    error={errors[field("unitPrice")]}
-                    onChange={(unitPrice) => {
-                      setLine(key, { unitPrice });
-                    }}
-                  />
-                </>
+              {line.item === null && (
+                <ItemLabel
+                  line={line}
+                  onOpen={() => {
+                    setOptionsFor(key);
+                  }}
+                  onUse={(item) => {
+                    setLine(key, { item });
+                  }}
+                />
               )}
-              <Input
-                label="Amount charged"
-                showLabel={false}
-                amount
-                className={wide ? undefined : styles.lineAmount}
-                value={line.lineTotal}
-                error={errors[field("lineTotal")]}
-                warnings={warnings.get(field("lineTotal"))}
-                onChange={(lineTotal) => {
-                  setLine(key, { lineTotal });
-                }}
-              />
-              <button
-                type="button"
-                className={styles.iconButton}
-                aria-label={`Line options for ${line.rawName === "" ? "this line" : line.rawName}: details, split, remove`}
-                onClick={() => {
-                  setOptionsFor(key);
-                }}
-              >
-                <Ellipsis size={18} aria-hidden />
-              </button>
             </div>
           );
         })}
@@ -387,21 +403,24 @@ function ItemLabel({
           offer.item.name,
           { kind: "existing", item: offer.item },
         ]
-      : ["Name it", offer.name, { kind: "new", name: offer.name }];
+      : ["", offer.name, { kind: "new", name: offer.name }];
   return (
     <p className={styles.itemOffer}>
       <span>
-        {label}: <strong>{name}</strong>
+        {/* A new item's suggested name needs no label; a known item's says how it was found. */}
+        {label !== "" && `${label}: `}
+        <strong>{name}</strong>
       </span>
       <button
         type="button"
         className={styles.useIt}
-        aria-label={`Use ${name} for this line`}
+        aria-label={offer.kind === "new" ? `Name this item ${name}` : `Use ${name} for this line`}
         onClick={() => {
           onUse(item);
         }}
       >
-        Use it
+        {/* Naming makes a new item; a known item is only used. */}
+        {offer.kind === "new" ? "Name item" : "Use it"}
       </button>
     </p>
   );

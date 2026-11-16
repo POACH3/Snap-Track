@@ -66,9 +66,8 @@ test.describe("desktop", { tag: "@desktop" }, () => {
       "aria-pressed",
       "true",
     );
-    // A line with no item offers the model's readable name; Use it names the item on confirm.
-    await expect(page.getByText("Name it:").first()).toBeVisible();
-    await page.getByRole("button", { name: "Use Whole milk, 1 gal for this line" }).click();
+    // A line with no item offers the model's readable name; Name item names it on confirm.
+    await page.getByRole("button", { name: "Name this item Whole milk, 1 gal" }).click();
     await expect(page.getByRole("button", { name: /Whole milk, 1 gal/ })).toBeVisible();
     await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(toast(page, "Receipt confirmed.")).toBeVisible();
