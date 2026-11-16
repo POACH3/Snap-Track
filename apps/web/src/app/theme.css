@@ -47,36 +47,36 @@
   --font: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color-scheme: light;
-    --bg-page: #f3f5f3;
-    --surface: #ffffff;
-    --surface-raised: #eaeeeb;
-    --border: #dde3df;
-    --border-hover: #c5cec8;
-    --text-heading: #141615;
-    --text-body: #3a423d;
-    --text-muted: #535d57;
-    --accent-hover: #1f543b;
-    --accent-text: #276749;
-    --on-accent: #ffffff;
-    --success: #276749;
-    --warning: #965300;
-    --danger: #cc1414;
-    --accent-tint: rgba(39, 103, 73, 0.1);
-    --accent-tint-border: rgba(39, 103, 73, 0.25);
-    --warning-tint: rgba(150, 83, 0, 0.16);
-    --warning-border: rgba(150, 83, 0, 0.4);
-    --danger-tint: rgba(204, 20, 20, 0.12);
-    --danger-border: rgba(204, 20, 20, 0.4);
-    --surface-glass: rgba(255, 255, 255, 0.62);
-    --surface-glass-strong: rgba(255, 255, 255, 0.45);
-    --glass-border: rgba(20, 22, 21, 0.08);
-    --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-    --scrim: rgba(20, 22, 21, 0.25);
-    --shadow: 0 8px 24px rgba(20, 22, 21, 0.08);
-    --shadow-glass: 0 12px 40px rgba(20, 22, 21, 0.14);
-    --snap-glow: 0 10px 24px rgba(39, 103, 73, 0.35);
-  }
+/* Light: the person's choice in Settings, or the device's when the choice is System. The attribute
+   is set before first paint by index.html and kept current by src/shared/theme.ts. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-page: #f3f5f3;
+  --surface: #ffffff;
+  --surface-raised: #eaeeeb;
+  --border: #dde3df;
+  --border-hover: #c5cec8;
+  --text-heading: #141615;
+  --text-body: #3a423d;
+  --text-muted: #535d57;
+  --accent-hover: #1f543b;
+  --accent-text: #276749;
+  --on-accent: #ffffff;
+  --success: #276749;
+  --warning: #965300;
+  --danger: #cc1414;
+  --accent-tint: rgba(39, 103, 73, 0.1);
+  --accent-tint-border: rgba(39, 103, 73, 0.25);
+  --warning-tint: rgba(150, 83, 0, 0.16);
+  --warning-border: rgba(150, 83, 0, 0.4);
+  --danger-tint: rgba(204, 20, 20, 0.12);
+  --danger-border: rgba(204, 20, 20, 0.4);
+  --surface-glass: rgba(255, 255, 255, 0.62);
+  --surface-glass-strong: rgba(255, 255, 255, 0.45);
+  --glass-border: rgba(20, 22, 21, 0.08);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --scrim: rgba(20, 22, 21, 0.25);
+  --shadow: 0 8px 24px rgba(20, 22, 21, 0.08);
+  --shadow-glass: 0 12px 40px rgba(20, 22, 21, 0.14);
+  --snap-glow: 0 10px 24px rgba(39, 103, 73, 0.35);
 }

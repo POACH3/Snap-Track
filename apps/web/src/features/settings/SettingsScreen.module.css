@@ -41,3 +41,32 @@
 .logout {
   margin-top: 16px;
 }
+
+/* Dark | Light | System, a segmented control (docs/DESIGN.md, "Theme tokens"; sizes as in "Add expense"). */
+.themes {
+  display: inline-flex;
+  margin-top: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg-page);
+}
+
+.theme {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.theme[aria-pressed="true"] {
+  background: var(--surface-raised);
+  color: var(--text-heading);
+  font-weight: 600;
+}

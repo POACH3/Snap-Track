@@ -13,6 +13,22 @@ if known), followed by:
 - Before doing it, decide: anything that needs the developer's call first (optional).
 
 Group related items under one title, each as its own bold bullet with these fields.
+
+## Segmented control styles are copied in two places (added 2026-11-16)
+
+The Dark / Light / System control in Settings (branch `stage-4-manual-entry`) reuses the look of
+Add expense's Quick / Items control by copying its CSS and its button-group markup.
+
+- Where: `apps/web/src/features/settings/SettingsScreen.module.css` (`.themes`, `.theme`) and
+  `SettingsScreen.tsx`; `apps/web/src/features/receipts/ManualEntry.module.css` (`.modes`,
+  `.mode`) and `modeSwitch` in `ManualEntryScreen.tsx`.
+- Why: the sizes and colors are one design (`docs/DESIGN.md`, "Add expense"), so a change to it
+  has to be made twice.
+- Why it can wait: only two uses, and both are small. Worth doing when a third appears (the
+  desktop tabs in `docs/DESIGN.md` are a proposed segmented control).
+- To fix: add a shared `SegmentedControl` in `apps/web/src/shared/ui/` (options, value,
+  `onChange`, `aria-label`), use it in both screens, and delete the copied CSS. Then run
+  `pnpm check` and `pnpm test:e2e` (Add expense is covered by `e2e/manual.spec.ts`).
 ## SPEC.md says the LLM server starts at boot (added 2026-11-15)
 
 Found while settling the relay contract for Stage 3 (commit `99d3151`). SnapTrack's SPEC
