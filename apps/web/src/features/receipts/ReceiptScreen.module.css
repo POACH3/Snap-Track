@@ -137,8 +137,13 @@
   /* The photo card over the edit card (docs/DESIGN.md, "Receipts screens"). */
   grid-template-rows: auto minmax(0, 1fr) minmax(0, 1.25fr);
   gap: 12px;
-  /* Fills the page area, which is exactly one screen tall (AppShell, "fullHeight"). */
-  height: 100%;
+  /* Pinned to the screen's edges, so the document has nothing to scroll or drag (iOS drags a
+     page that merely fits). Padding matches the page's, inside the safe areas. */
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  padding: calc(8px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    calc(18px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 .noPhoto {
   grid-template-rows: auto minmax(0, 1fr);
@@ -256,4 +261,12 @@
   width: 20px;
   height: 20px;
   accent-color: var(--accent);
+}
+
+/* From 640px the side navigation sits on the left; the pinned layout starts after it. */
+@media (min-width: 640px) {
+  .phone {
+    left: 232px;
+    padding: calc(24px + env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) 24px 24px;
+  }
 }

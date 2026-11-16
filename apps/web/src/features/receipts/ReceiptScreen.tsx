@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useBlocker, useNavigate, useParams } from "react-router";
 import { api } from "../../shared/api/client.ts";
+import { useLockPageScroll } from "../../shared/use-lock-page-scroll.ts";
 import { useMediaQuery, WIDE } from "../../shared/use-media-query.ts";
 import { Button } from "../../shared/ui/Button.tsx";
 import { ConfirmModal } from "../../shared/ui/ConfirmModal.tsx";
@@ -112,6 +113,8 @@ function rematchBody({ stores, items }: { stores: number; items: number }): stri
 function Review({ latest }: { latest: ReceiptDetail }) {
   const [receipt, setReceipt] = useState(latest);
   const wide = useMediaQuery(WIDE);
+  // The phone layout's cards stay put; only the edit card scrolls inside.
+  useLockPageScroll(!wide);
   const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirmReceipt();

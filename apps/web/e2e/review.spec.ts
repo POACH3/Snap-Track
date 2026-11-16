@@ -160,6 +160,14 @@ test.describe("phone", { tag: "@phone" }, () => {
     await page.getByRole("button", { name: "Done" }).click();
     await openWhenRead(page, await receiptId(reply));
 
+    // The page itself never scrolls; only the edit card's body does.
+    const pageScrolls = () =>
+      page.evaluate(() => {
+        window.scrollTo(0, 10_000);
+        return document.scrollingElement?.scrollTop ?? window.scrollY;
+      });
+    expect(await pageScrolls()).toBe(0);
+
     // No tab bar here; the edit card holds the actions.
     await expect(page.getByRole("button", { name: "Snap receipt" })).toBeHidden();
     await expect(page.getByRole("heading", { name: "Store", exact: true })).toBeVisible();
@@ -172,6 +180,7 @@ test.describe("phone", { tag: "@phone" }, () => {
     await page.getByRole("button", { name: "Continue to items" }).click();
 
     await expect(page.getByRole("heading", { name: "Items & totals" })).toBeVisible();
+    expect(await pageScrolls()).toBe(0);
     await expect(page.getByRole("img", { name: "Photo 1 of 1" })).toBeInViewport();
     const warning = page.getByText("The items add up to $5.00, but the subtotal says $6.00.");
     await expect(warning).toBeVisible();

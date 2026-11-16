@@ -4,6 +4,13 @@
   box-sizing: border-box;
 }
 
+/* The page is never wider than the screen, so a phone can't zoom out past it filling the screen.
+   Zooming in still works. (Paired with minimum-scale=1 in index.html.) */
+html,
+body {
+  overflow-x: clip;
+}
+
 body {
   margin: 0;
   background: var(--bg-page);
