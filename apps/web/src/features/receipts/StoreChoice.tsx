@@ -76,7 +76,7 @@ export function StoreChoice({
   const offerDetected = detected !== null && !suggestions.some((s) => sameName(s.store.name, detected));
   const isNew = (name: string) => value?.kind === "new" && sameName(value.name, name);
 
-  const createOption = (name: string, detail: string) => (
+  const createOption = (name: string, detail: string | null) => (
     <li key={`new:${name}`}>
       <button
         type="button"
@@ -90,7 +90,7 @@ export function StoreChoice({
           <span className={styles.name}>
             <Plus size={16} aria-hidden /> Create "{name}"
           </span>
-          <span className={styles.reason}>{detail}</span>
+          {detail !== null && <span className={styles.reason}>{detail}</span>}
         </span>
         {isNew(name) && <CircleCheck size={20} className={styles.check} aria-hidden />}
       </button>
@@ -134,7 +134,7 @@ export function StoreChoice({
       {(suggestions.length > 0 || offerDetected) && (
         <ul className={styles.options} aria-label="Suggested stores">
           {suggestions.map((s) => option(s.store, reason(s)))}
-          {offerDetected && createOption(detected, "A new store, named as the receipt shows it")}
+          {offerDetected && createOption(detected, null)}
         </ul>
       )}
       <div className={styles.search}>
